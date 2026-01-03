@@ -6,7 +6,6 @@ using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.Gaming.Input;
-using Windows.Media;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.System;

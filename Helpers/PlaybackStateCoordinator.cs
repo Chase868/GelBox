@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Services;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 using Windows.UI.Xaml;

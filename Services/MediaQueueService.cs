@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Gelatinarm.Views;
 using Jellyfin.Sdk;

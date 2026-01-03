@@ -3,10 +3,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Helpers;
 using Gelatinarm.Services;
 using Jellyfin.Sdk;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Gelatinarm.ViewModels

@@ -6,7 +6,6 @@ using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Gelatinarm.Services;
 using Jellyfin.Sdk.Generated.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
 using Windows.UI.Xaml;

@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Gelatinarm.Constants;
 using Gelatinarm.Helpers;
 using Gelatinarm.Models;
-using Gelatinarm.ViewModels;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Jellyfin.Sdk.Generated.QuickConnect.Connect;

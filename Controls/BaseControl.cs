@@ -1,10 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Gelatinarm.Services;
-using Gelatinarm.Helpers;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel;
 using Windows.UI.Xaml;

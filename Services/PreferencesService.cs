@@ -6,7 +6,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Storage;

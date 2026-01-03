@@ -12,7 +12,6 @@ using Gelatinarm.Models;
 using Gelatinarm.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 using Windows.UI.Xaml;
@@ -1236,10 +1235,10 @@ namespace Gelatinarm.ViewModels
 
                 var reportPosition = isHlsStream ? 0 : (_playbackParams.StartPositionTicks ?? 0);
 
-                    if (_mediaPlaybackService is IMediaSessionService sessionService)
-                    {
-                        await sessionService.ReportPlaybackStartAsync(_playSessionId, reportPosition);
-                    }
+                if (_mediaPlaybackService is IMediaSessionService sessionService)
+                {
+                    await sessionService.ReportPlaybackStartAsync(_playSessionId, reportPosition);
+                }
 
                 // Preload next episode if applicable
                 if (CurrentItem.Type == BaseItemDto_Type.Episode)
