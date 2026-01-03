@@ -455,32 +455,26 @@ services.AddSingleton<INavigationService, NavigationService>();
 services.AddSingleton<IMediaPlaybackService, MediaPlaybackService>();
 
 // Transient: Stateless services and ViewModels
-services.AddTransient<IMediaControllerService, MediaControllerService>();
+services.AddTransient<IControllerInputService, ControllerInputService>();
 services.AddTransient<MainViewModel>();
 ```
 
 ## Media Resume Pattern
 
 ### Overview
-Resume position is applied when MediaPlayer transitions to Playing state, not using VideoFrameAvailable.
+Resume position is applied when MediaPlayer transitions to Playing state (event-driven), not using VideoFrameAvailable.
 
 ### Implementation
 ```csharp
 // In PlaybackStateChanged handler
 if (newState == MediaPlaybackState.Playing)
 {
-    if (!_hasVideoStarted && !_hasPerformedInitialSeek)
-    {
-        _hasVideoStarted = true;
-        Logger.LogInformation("Video playback started - applying resume position");
-        
-        // Apply resume position
-        var resumeResult = await TryApplyResumePositionAsync();
-        if (resumeResult)
-        {
-            Logger.LogInformation("Applied resume position on playback start");
-        }
-    }
+    await _playbackControlService.HandleResumeOnPlaybackStartAsync(
+        _sessionState,
+        _playbackParams,
+        GetCurrentPlaybackPosition,
+        CompleteHlsResumeFix,
+        HandleResumeFailureAsync);
 }
 ```
 
@@ -488,7 +482,8 @@ if (newState == MediaPlaybackState.Playing)
 - **DO NOT use VideoFrameAvailable** - It requires `IsVideoFrameServerEnabled=true` which is for frame processing (external subtitles, filters)
 - **DO use PlaybackSession.PlaybackState** - Reliable indicator of playback readiness
 - **Resume triggers on Playing state** - Video is ready when state transitions to Playing
-- **No timeouts needed** - Playing state is deterministic
+- **Retries are centralized** in `PlaybackResumeCoordinator` and tuned per stream type
+- **Avoid direct session reads** off the UI thread; use the state snapshot from `PlaybackStateChanged`
 
 ## Controller Input Pattern
 
@@ -517,13 +512,13 @@ public sealed partial class SearchPage : BasePage
 ```csharp
 public sealed partial class MediaPlayerPage : BasePage
 {
-    private IMediaControllerService _controllerService;
+    private IControllerInputService _controllerService;
     
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
         
-        _controllerService = GetRequiredService<IMediaControllerService>();
+        _controllerService = GetRequiredService<IControllerInputService>();
         _controllerService.ActionTriggered += OnControllerAction;
         
         this.KeyDown += OnKeyDown;
@@ -681,16 +676,20 @@ HLS resume handling remains more defensive than DirectPlay because some servers 
 Key components for HLS resume handling:
 - **Services/PlaybackResumeCoordinator.cs**: shared resume state machine for HLS and DirectPlay
 - **Services/PlaybackSourceResolver.cs**: stream type selection and policy application
-- **Services/PlaybackResumeModels.cs**: resume policies, retry config, and verification helpers
+- **Services/PlaybackResumeCoordinator.cs**: resume policies, retry config, verification helpers, and coordinator logic
 - **ViewModels/MediaPlayerViewModel.cs**: HLS manifest offset application and seek behavior
-- **Helpers/ResumeFlowCoordinator.cs**: resume acceptance, completion reporting, and logging
-- **Helpers/ResumeRetryCoordinator.cs**: consistent retry loop and delay/tolerance handling
-- **Helpers/PlaybackStateOrchestrator.cs**: normalized playback state transitions
+- **Services/PlaybackResumeCoordinator.cs**: resume acceptance, completion reporting, and retry scheduling
+- **Helpers/PlaybackStateCoordinator.cs**: normalized playback state transitions
 - **Helpers/BufferingStateCoordinator.cs**: buffering start/end detection and timeout triggers
 - **Helpers/SeekCompletionCoordinator.cs**: seek completion logging and validation
 
 #### Manifest Offset Handling
-Manifest offset is used when the server creates a new HLS manifest at a different position (for example, large backward seeks or track switches). It is tracked in `Helpers/PlaybackSessionState.cs`, surfaced via `PlaybackControlService.HlsManifestOffset`, and applied in `ViewModels/MediaPlayerViewModel.cs` for correct position reporting.
+Manifest offset is used when the server creates a new HLS manifest at a different position (for example, large backward seeks or track switches). It is tracked in `Helpers/PlaybackSessionState.cs`, surfaced via `PlaybackControlService.HlsManifestOffset`, and applied in `ViewModels/MediaPlayerViewModel.cs` for correct position reporting. The buffering fix only triggers when a manifest offset or track change is active.
+
+#### Buffering + Seek Awareness
+- Buffering start/end is driven by the PlaybackStateChanged snapshot (event-driven).
+- Seek operations reset the buffering timeout and update `LastSeekTime` to avoid false stalls.
+- Buffering logs include `PendingSeeks` and `LastSeekAge` to distinguish seek-related buffering from real stalls.
 
 #### Confirming StartTimeTicks Behavior
 Use the existing resume logs:

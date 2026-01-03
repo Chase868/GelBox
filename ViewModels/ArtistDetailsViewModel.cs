@@ -78,7 +78,7 @@ namespace Gelatinarm.ViewModels
             var context = CreateErrorContext("InitializeArtist");
             try
             {
-                IsLoading = true;
+                await RunOnUIThreadAsync(() => IsLoading = true);
                 try
                 {
                     if (parameter is BaseItemDto dto)
@@ -92,7 +92,7 @@ namespace Gelatinarm.ViewModels
                 }
                 finally
                 {
-                    IsLoading = false;
+                    await RunOnUIThreadAsync(() => IsLoading = false);
                 }
             }
             catch (Exception ex)
@@ -105,8 +105,11 @@ namespace Gelatinarm.ViewModels
                 else
                 {
                     Logger?.LogError(ex, $"Error in {GetType().Name}.{context?.Operation}");
-                    ErrorMessage = ex.Message;
-                    IsError = true;
+                    await RunOnUIThreadAsync(() =>
+                    {
+                        ErrorMessage = ex.Message;
+                        IsError = true;
+                    });
                 }
             }
         }
@@ -114,7 +117,7 @@ namespace Gelatinarm.ViewModels
         private async Task LoadArtistFromDtoAsync(BaseItemDto dto, CancellationToken cancellationToken)
         {
             Logger?.LogInformation($"ArtistDetailsViewModel: Loading from BaseItemDto: {dto.Name}");
-            CurrentItem = dto;
+            await RunOnUIThreadAsync(() => CurrentItem = dto);
             await LoadArtistDetailsAsync(cancellationToken);
         }
 
@@ -139,7 +142,7 @@ namespace Gelatinarm.ViewModels
                 throw new Exception($"Failed to load artist with ID {itemId}");
             }
 
-            CurrentItem = artist;
+            await RunOnUIThreadAsync(() => CurrentItem = artist);
             await LoadArtistDetailsAsync(cancellationToken);
         }
 
@@ -196,7 +199,7 @@ namespace Gelatinarm.ViewModels
                     var imageUrl = ImageHelper.BuildImageUrl(CurrentItem.Id.Value, "Primary", 400, null, imageTag);
                     if (!string.IsNullOrEmpty(imageUrl))
                     {
-                        ArtistImage = new BitmapImage(new Uri(imageUrl));
+                        await RunOnUIThreadAsync(() => ArtistImage = new BitmapImage(new Uri(imageUrl)));
                     }
 
                     await Task.CompletedTask;

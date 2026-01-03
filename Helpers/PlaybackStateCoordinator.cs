@@ -7,12 +7,18 @@ using Windows.UI.Xaml;
 
 namespace Gelatinarm.Helpers
 {
-    internal sealed class PlaybackStateOrchestrator
+    internal sealed class PlaybackStateCoordinator
     {
+        private const double PositionEpsilonSeconds = 0.5;
+        private static readonly TimeSpan DuplicateWindow = TimeSpan.FromMilliseconds(250);
         private readonly ILogger _logger;
         private readonly BufferingStateCoordinator _bufferingStateCoordinator;
+        private MediaPlaybackState _lastState = MediaPlaybackState.None;
+        private TimeSpan _lastPosition = TimeSpan.Zero;
+        private DateTime _lastProcessedAt = DateTime.MinValue;
+        private bool _hasLastSnapshot;
 
-        public PlaybackStateOrchestrator(
+        public PlaybackStateCoordinator(
             ILogger logger,
             BufferingStateCoordinator bufferingStateCoordinator)
         {
@@ -30,62 +36,73 @@ namespace Gelatinarm.Helpers
 
             try
             {
-                _logger.LogInformation("[VM-PLAYBACK-STATE] Handler entered");
-
-                var snapshot = PlaybackSessionSnapshot.Capture(
-                    context.Session,
-                    skipBufferingProgress: context.SessionState?.IsHlsStream == true);
-                if (!snapshot.HasSession)
-                {
-                    _logger.LogWarning("[VM-PLAYBACK-STATE] Playback session missing, ignoring event");
-                    return;
-                }
-
-                var newState = snapshot.State;
-                _logger.LogInformation($"[VM-PLAYBACK-STATE] State changed to: {newState}, " +
-                                       $"Position: {snapshot.Position.TotalSeconds:F2}s, " +
-                                       $"BufferingProgress: {snapshot.BufferingProgress:P}");
-
                 await context.RunOnUiThreadAsync(async () =>
                 {
                     try
                     {
-                        var wasBuffering = context.GetIsBuffering();
-                        var uiSnapshot = PlaybackSessionSnapshot.Capture(
+                        var snapshot = PlaybackSessionSnapshot.Capture(
                             context.Session,
                             skipBufferingProgress: context.SessionState?.IsHlsStream == true);
-                        var rawPosition = uiSnapshot.Position;
+                        if (!snapshot.HasSession)
+                        {
+                            _logger.LogWarning("[VM-PLAYBACK-STATE] Playback session missing, ignoring event");
+                            return;
+                        }
+
+                        if (ShouldSkipSnapshot(snapshot))
+                        {
+                            return;
+                        }
+
+                        _logger.LogInformation("[VM-PLAYBACK-STATE] Handler entered");
+                        var newState = snapshot.State;
+                        _logger.LogInformation($"[VM-PLAYBACK-STATE] State changed to: {newState}, " +
+                                               $"Position: {snapshot.Position.TotalSeconds:F2}s, " +
+                                               $"BufferingProgress: {snapshot.BufferingProgress:P}");
+
+                        RememberSnapshot(snapshot);
+                        context.SetPlaybackState?.Invoke(snapshot.State);
+
+                        var rawPosition = snapshot.Position;
 
                         context.SetRawPosition(rawPosition);
 
                         var position = context.GetDisplayPosition();
-                        var bufferingProgress = uiSnapshot.BufferingProgress;
-                        var canSeek = uiSnapshot.CanSeek;
+                        var bufferingProgress = snapshot.BufferingProgress;
+                        var canSeek = snapshot.CanSeek;
 
+                        var hadBufferingStart = context.GetBufferingStartTime().HasValue;
                         _logger.LogInformation($"PlaybackStateChanged: {newState}, Position: {position.TotalSeconds:F2}s, " +
-                                               $"BufferingProgress: {bufferingProgress:F2}, CanSeek: {canSeek}, WasBuffering: {wasBuffering}");
+                                               $"BufferingProgress: {bufferingProgress:F2}, CanSeek: {canSeek}, " +
+                                               $"HadBufferingStart: {hadBufferingStart}");
 
-                        context.SetIsBuffering(newState == MediaPlaybackState.Buffering);
+                        var isBuffering = newState == MediaPlaybackState.Buffering;
+                        context.NotifyIsBufferingChanged?.Invoke();
+                        context.NotifyIsPlayingChanged?.Invoke();
+                        context.NotifyIsPausedChanged?.Invoke();
 
                         var bufferingResult = _bufferingStateCoordinator.Handle(new BufferingStateRequest
                         {
-                            IsBuffering = context.GetIsBuffering(),
-                            WasBuffering = wasBuffering,
+                            IsBuffering = isBuffering,
                             IsHls = context.SessionState.IsHlsStream,
+                            IsHlsTrackChange = context.SessionState.IsHlsTrackChange,
+                            HasManifestOffset = context.GetHasManifestOffset?.Invoke() == true,
                             NewState = newState,
                             Position = position,
                             ExpectedHlsSeekTarget = context.SessionState.ExpectedHlsSeekTarget,
-                            NaturalDuration = uiSnapshot.NaturalDuration,
+                            NaturalDuration = snapshot.NaturalDuration,
                             MetadataDuration = context.GetMetadataDuration(),
-                            BufferingStartTime = context.GetBufferingStartTime(),
-                            HlsManifestOffset = context.SessionState.HlsManifestOffset,
-                            HlsManifestOffsetApplied = context.SessionState.HlsManifestOffsetApplied
+                            LastSeekTime = context.SessionState.LastSeekTime,
+                            PendingSeekCount = context.SessionState.PendingSeekCount,
+                            BufferingStartTime = context.GetBufferingStartTime()
                         });
 
                         context.SetBufferingStartTime(bufferingResult.BufferingStartTime);
                         context.SessionState.ExpectedHlsSeekTarget = bufferingResult.ExpectedHlsSeekTarget;
-                        context.SessionState.HlsManifestOffset = bufferingResult.HlsManifestOffset;
-                        context.SessionState.HlsManifestOffsetApplied = bufferingResult.HlsManifestOffsetApplied;
+                        if (bufferingResult.HlsManifestOffset > TimeSpan.Zero)
+                        {
+                            context.ApplyManifestOffsetFromBuffering?.Invoke(bufferingResult.HlsManifestOffset);
+                        }
 
                         if (bufferingResult.TriggerHlsBufferingFix)
                         {
@@ -124,7 +141,7 @@ namespace Gelatinarm.Helpers
                     }
                     catch (Exception innerEx)
                     {
-                        _logger.LogError(innerEx, $"Error inside RunOnUIThreadAsync for state {newState}");
+                        _logger.LogError(innerEx, "Error inside RunOnUIThreadAsync for playback state handling");
                     }
                 }).ConfigureAwait(false);
             }
@@ -132,6 +149,35 @@ namespace Gelatinarm.Helpers
             {
                 _logger.LogError(ex, "Error in OnPlaybackStateChanged event handler (outer)");
             }
+        }
+
+        private bool ShouldSkipSnapshot(PlaybackSessionSnapshot snapshot)
+        {
+            if (!_hasLastSnapshot)
+            {
+                return false;
+            }
+
+            if (snapshot.State != _lastState)
+            {
+                return false;
+            }
+
+            var positionDelta = Math.Abs((snapshot.Position - _lastPosition).TotalSeconds);
+            if (positionDelta > PositionEpsilonSeconds)
+            {
+                return false;
+            }
+
+            return DateTime.UtcNow - _lastProcessedAt < DuplicateWindow;
+        }
+
+        private void RememberSnapshot(PlaybackSessionSnapshot snapshot)
+        {
+            _lastState = snapshot.State;
+            _lastPosition = snapshot.Position;
+            _lastProcessedAt = DateTime.UtcNow;
+            _hasLastSnapshot = true;
         }
     }
 
@@ -146,12 +192,16 @@ namespace Gelatinarm.Helpers
         public Func<TimeSpan> GetMetadataDuration { get; set; }
         public Action<MediaPlaybackSession> HandleHlsBufferingFix { get; set; }
         public Func<Action, Task> RunOnUiThreadAsync { get; set; }
-        public Func<bool> GetIsBuffering { get; set; }
-        public Action<bool> SetIsBuffering { get; set; }
+        public Action NotifyIsBufferingChanged { get; set; }
+        public Action NotifyIsPlayingChanged { get; set; }
+        public Action NotifyIsPausedChanged { get; set; }
         public Func<DateTime?> GetBufferingStartTime { get; set; }
         public Action<DateTime?> SetBufferingStartTime { get; set; }
+        public Func<bool> GetHasManifestOffset { get; set; }
+        public Action<MediaPlaybackState> SetPlaybackState { get; set; }
         public Func<bool> GetHasVideoStarted { get; set; }
         public Action<bool> SetHasVideoStarted { get; set; }
         public Func<Task> HandleResumeOnPlaybackStartAsync { get; set; }
+        public Action<TimeSpan> ApplyManifestOffsetFromBuffering { get; set; }
     }
 }

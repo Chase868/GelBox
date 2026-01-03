@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Jellyfin.Sdk.Generated.Models;
+using Windows.Gaming.Input;
+using Windows.Media;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.System;
@@ -53,6 +56,228 @@ namespace Gelatinarm.Services
 
         void ClearUserData();
         Guid? GetCurrentUserGuid();
+    }
+
+    /// <summary>
+    ///     Service for managing user data operations like favorites and watched status
+    /// </summary>
+    public interface IUserDataService
+    {
+        /// <summary>
+        ///     Toggle favorite status for an item
+        /// </summary>
+        /// <param name="itemId">The item ID</param>
+        /// <param name="isFavorite">True to mark as favorite, false to unmark</param>
+        /// <param name="userId">Optional user ID, uses current user if not provided</param>
+        /// <returns>The updated user data</returns>
+        Task<UserItemDataDto> ToggleFavoriteAsync(Guid itemId, bool isFavorite, Guid? userId = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        ///     Toggle watched status for an item
+        /// </summary>
+        /// <param name="itemId">The item ID</param>
+        /// <param name="isWatched">True to mark as watched, false to unmark</param>
+        /// <param name="userId">Optional user ID, uses current user if not provided</param>
+        /// <returns>The updated user data</returns>
+        Task<UserItemDataDto> ToggleWatchedAsync(Guid itemId, bool isWatched, Guid? userId = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        ///     Get user data for an item
+        /// </summary>
+        /// <param name="itemId">The item ID</param>
+        /// <param name="userId">Optional user ID, uses current user if not provided</param>
+        /// <returns>The user data for the item</returns>
+        Task<UserItemDataDto> GetUserDataAsync(Guid itemId, Guid? userId = null,
+            CancellationToken cancellationToken = default);
+    }
+
+    public interface IUnifiedDeviceService : IDisposable
+    {
+        bool IsXboxEnvironment { get; }
+        bool IsXboxSeriesConsole { get; }
+        bool IsXboxSeriesDevice { get; }
+        bool IsNetworkAvailable { get; }
+        bool SupportsHDR { get; }
+        bool SupportsHDR10 { get; }
+        bool SupportsHDR10Plus { get; }
+        bool SupportsHLG { get; }
+        bool SupportsDolbyVision { get; }
+        bool SupportsHardwareDecoding { get; }
+        int MaxSupportedBitrate { get; }
+        bool IsFullScreenMode { get; }
+        bool IsControllerConnected { get; }
+        int ConnectedControllerCount { get; }
+        GamepadButtons CurrentButtonState { get; }
+        bool IsXboxNavigationEnabled { get; }
+        bool IsMonitoring { get; }
+        string GetDeviceName();
+        string GetDeviceId();
+        Task<DeviceInfo> GetDeviceInfoAsync();
+        ConnectionType GetCurrentConnectionType();
+        Task EnterFullScreenModeAsync();
+        Task ExitFullScreenModeAsync();
+        void EnableXboxNavigation();
+        void DisableMouseCursor();
+        Task StartMonitoringAsync();
+        Task StopMonitoringAsync();
+        event EventHandler<GamepadEventArgs> ControllerConnected;
+        event EventHandler<GamepadEventArgs> ControllerDisconnected;
+        event EventHandler<GamepadButtons> ButtonReleased;
+        event EventHandler<GamepadButtonStateChangedEventArgs> ButtonStateChanged;
+        event EventHandler<SystemEventArgs> SystemEvent;
+    }
+
+    public interface IDeviceProfileService
+    {
+        DeviceProfile GetDeviceProfile();
+    }
+
+    public interface IMediaControlService
+    {
+        MediaPlayer MediaPlayer { get; }
+        bool IsPlaying { get; }
+        BaseItemDto CurrentItem { get; }
+        RepeatMode RepeatMode { get; }
+        TimeSpan Position { get; }
+        TimeSpan Duration { get; }
+
+        event EventHandler<BaseItemDto> NowPlayingChanged;
+        event EventHandler<MediaPlaybackState> PlaybackStateChanged;
+        event EventHandler<MediaPlayerFailedEventArgs> MediaFailed;
+        event EventHandler MediaEnded;
+        event EventHandler MediaOpened;
+
+        Task InitializeAsync(MediaPlayer mediaPlayer);
+        void Play();
+        void Pause();
+        void Stop();
+        void SeekTo(TimeSpan position);
+        void SeekForward(int seconds);
+        void SeekBackward(int seconds);
+        void SetRepeatMode(RepeatMode mode);
+        RepeatMode CycleRepeatMode();
+        void SetPlaybackRate(double rate);
+        Task SetMediaSource(MediaPlaybackItem source, BaseItemDto item);
+        void ClearMediaSource();
+    }
+
+    public interface INavigationService : IDisposable
+    {
+        bool CanGoBack { get; }
+        bool IsNavigating { get; }
+        event EventHandler<Type> Navigated;
+        void Initialize(Frame frame);
+        bool Navigate(Type pageType, object parameter = null);
+        Task<bool> NavigateAsync(Type pageType, object parameter = null);
+        void NavigateToHome();
+        void NavigateToSettings();
+        void NavigateToSearch(object parameter = null);
+        void NavigateToFavorites();
+        void NavigateToLibrary();
+        void NavigateToItemDetails(BaseItemDto item);
+        bool GoBack();
+        object GetLastNavigationParameter();
+    }
+
+    public interface IMemoryMonitor
+    {
+        bool IsMemoryConstrained { get; }
+        event EventHandler<MemoryUsageEventArgs> MemoryUsageChanged;
+        event EventHandler<MemoryPressureEventArgs> MemoryPressureChanged;
+    }
+
+    public interface INetworkMonitor
+    {
+        long CurrentBandwidth { get; }
+        ConnectionType ConnectionType { get; }
+        event EventHandler<NetworkConditionsEventArgs> NetworkConditionsChanged;
+        event EventHandler<BandwidthEventArgs> BandwidthChanged;
+        event EventHandler<ConnectionQualityEventArgs> ConnectionQualityChanged;
+    }
+
+    public interface ISystemMonitorService : IDisposable
+    {
+        // Memory monitoring
+        ulong AvailableMemory { get; }
+        ulong TotalMemory { get; }
+        double MemoryUsage { get; }
+        AppMemoryUsageLevel MemoryPressure { get; }
+        bool IsMemoryConstrained { get; }
+
+        // Network monitoring
+        bool IsNetworkAvailable { get; }
+        double CurrentBandwidth { get; }
+        NetworkMetrics NetworkMetrics { get; }
+
+        // Performance and resource management
+        bool IsResourceConstrained { get; }
+        bool IsMonitoring { get; }
+        SystemMetrics GetCurrentMetrics();
+
+        // Control methods
+        Task StartMonitoringAsync();
+        Task StopMonitoringAsync();
+
+        // Events
+        event EventHandler<SystemMetrics> MetricsUpdated;
+        event EventHandler<MemoryUsageEventArgs> MemoryUsageChanged;
+        event EventHandler<AppMemoryUsageLevel> MemoryPressureChanged;
+        event EventHandler<NetworkMetrics> NetworkMetricsUpdated;
+        event EventHandler<bool> NetworkStatusChanged;
+        event EventHandler<double> BandwidthChanged;
+        event EventHandler<ResourceConstraintEventArgs> ResourceConstraintDetected;
+    }
+
+    public interface IPreferencesService
+    {
+        // Xbox Features
+        bool IsXboxEnvironment { get; }
+
+        // Storage Operations
+        Task SaveAsync<T>(string key, T data);
+        Task<T> LoadAsync<T>(string key);
+        T GetValue<T>(string key, T defaultValue = default);
+        void SetValue<T>(string key, T value);
+        void RemoveValue(string key);
+        Task RemoveSettingAsync(string key);
+        Task ClearCacheAsync();
+
+
+        Task<Dictionary<string, object>> GetAllPreferences();
+
+        // Consolidated App Preferences
+        Task<AppPreferences> GetAppPreferencesAsync();
+        Task UpdateAppPreferencesAsync(AppPreferences preferences);
+        Task SaveAsDefaultAppPreferencesAsync(AppPreferences preferences);
+
+        // Playback Position
+        Task<long> GetPlaybackPositionAsync(string itemId);
+        Task SetPlaybackPositionAsync(string itemId, long positionTicks);
+    }
+
+    public interface IPlaybackQueueService
+    {
+        List<BaseItemDto> Queue { get; }
+        int CurrentQueueIndex { get; }
+        bool IsShuffleMode { get; }
+        List<int> ShuffledIndices { get; }
+        int CurrentShuffleIndex { get; }
+
+        event EventHandler<List<BaseItemDto>> QueueChanged;
+        event EventHandler<int> QueueIndexChanged;
+
+        void SetQueue(List<BaseItemDto> items, int startIndex = 0);
+        void AddToQueue(BaseItemDto item);
+        void AddToQueueNext(BaseItemDto item);
+        void ClearQueue();
+        void SetCurrentIndex(int index);
+
+        void SetShuffle(bool enabled);
+        void CreateShuffledIndices();
+        int GetNextIndex(bool isRepeatAll);
+        int GetPreviousIndex(bool isRepeatAll);
     }
 
     public interface IMediaPlaybackService
@@ -526,7 +751,7 @@ namespace Gelatinarm.Services
         ///     Gets the HLS manifest offset when server creates a new manifest at a different position
         ///     This should be added to the playback position to get the actual media position
         /// </summary>
-        TimeSpan HlsManifestOffset { get; }
+        TimeSpan HlsManifestOffset { get; set; }
 
         /// <summary>
         ///     Initialize the service with a media player instance
@@ -564,6 +789,11 @@ namespace Gelatinarm.Services
         bool IsHlsResumeInProgress();
 
         /// <summary>
+        ///     Check if any resume position is still pending
+        /// </summary>
+        bool HasPendingResumePosition();
+
+        /// <summary>
         ///     Get HLS resume status for diagnostics
         /// </summary>
         (bool InProgress, int Attempts, TimeSpan? Target) GetHlsResumeStatus();
@@ -572,6 +802,16 @@ namespace Gelatinarm.Services
         ///     Cancel any pending resume attempt
         /// </summary>
         void CancelPendingResume(string reason);
+
+        /// <summary>
+        ///     Handle resume flow on playback start (client-side seek + retries)
+        /// </summary>
+        Task<ResumeFlowOutcome> HandleResumeOnPlaybackStartAsync(
+            PlaybackSessionState sessionState,
+            MediaPlaybackParams playbackParams,
+            Func<TimeSpan> getCurrentPosition,
+            Action onHlsResumeFixCompleted,
+            Func<ResumeFailureContext, Task> onResumeFailedAsync);
 
         /// <summary>
         ///     Get available audio tracks
@@ -597,15 +837,6 @@ namespace Gelatinarm.Services
         /// <param name="subtitleStreamIndex">Optional subtitle stream index for subtitle changes</param>
         Task RestartPlaybackWithCurrentPositionAsync(int? maxBitrate = null, string restartReason = "stream change", int? audioStreamIndex = null, int? subtitleStreamIndex = null);
 
-        /// <summary>
-        ///     Event raised when playback state changes
-        /// </summary>
-        event EventHandler<MediaPlaybackState> PlaybackStateChanged;
-
-        /// <summary>
-        ///     Event raised when playback position changes
-        /// </summary>
-        event EventHandler<TimeSpan> PositionChanged;
     }
 
     /// <summary>
@@ -721,6 +952,11 @@ namespace Gelatinarm.Services
         Task NavigateToPreviousAsync();
 
         /// <summary>
+        ///     Navigate back to the originating page for this playback session
+        /// </summary>
+        Task NavigateBackToOriginAsync();
+
+        /// <summary>
         ///     Check if there's a next item available
         /// </summary>
         bool HasNextItem();
@@ -752,55 +988,9 @@ namespace Gelatinarm.Services
     }
 
     /// <summary>
-    ///     Service for managing playback statistics display
-    /// </summary>
-    public interface IPlaybackStatisticsService : IDisposable
-    {
-        /// <summary>
-        ///     Check if stats are currently visible
-        /// </summary>
-        bool IsVisible { get; }
-
-        /// <summary>
-        ///     Initialize the service
-        /// </summary>
-        Task InitializeAsync(MediaPlayer mediaPlayer);
-
-        /// <summary>
-        ///     Get formatted statistics for display
-        /// </summary>
-        PlaybackStats GetCurrentStats();
-
-        /// <summary>
-        ///     Start updating statistics
-        /// </summary>
-        void StartUpdating();
-
-        /// <summary>
-        ///     Stop updating statistics
-        /// </summary>
-        void StopUpdating();
-
-        /// <summary>
-        ///     Set the current media source info for accurate playback method display
-        /// </summary>
-        void SetMediaSourceInfo(MediaSourceInfo mediaSource);
-
-        /// <summary>
-        ///     Toggle stats visibility
-        /// </summary>
-        void ToggleVisibility();
-
-        /// <summary>
-        ///     Event raised when statistics update
-        /// </summary>
-        event EventHandler<PlaybackStats> StatsUpdated;
-    }
-
-    /// <summary>
     ///     Service for managing media controller input
     /// </summary>
-    public interface IMediaControllerService : IDisposable
+    public interface IControllerInputService : IDisposable
     {
         /// <summary>
         ///     Check if controller input is enabled
@@ -813,28 +1003,9 @@ namespace Gelatinarm.Services
         Task InitializeAsync(MediaPlayer mediaPlayer);
 
         /// <summary>
-        ///     Handle controller button press
-        /// </summary>
-        Task<bool> HandleButtonPressAsync(ControllerButton button);
-
-        /// <summary>
-        ///     Handle controller analog input
-        /// </summary>
-
-        /// <summary>
         ///     Handle KeyDown events from the MediaPlayerPage
         /// </summary>
         Task<bool> HandleKeyDownAsync(VirtualKey key);
-
-        /// <summary>
-        ///     Set button mapping configuration
-        /// </summary>
-        void SetButtonMapping(Dictionary<ControllerButton, MediaAction> mapping);
-
-        /// <summary>
-        ///     Get current button mapping
-        /// </summary>
-        Dictionary<ControllerButton, MediaAction> GetButtonMapping();
 
         /// <summary>
         ///     Enable or disable controller input
@@ -855,72 +1026,6 @@ namespace Gelatinarm.Services
         ///     Update the visibility state of the media controls
         /// </summary>
         void SetControlsVisible(bool visible);
-    }
-
-    /// <summary>
-    ///     Service for managing skip intro/outro functionality
-    /// </summary>
-    public interface ISkipSegmentService : IDisposable
-    {
-        /// <summary>
-        ///     Initialize the service
-        /// </summary>
-        Task InitializeAsync(MediaPlayer mediaPlayer, BaseItemDto item);
-
-        /// <summary>
-        ///     Load media segments for the current item
-        /// </summary>
-        Task LoadSegmentsAsync(string itemId);
-
-        /// <summary>
-        ///     Check if intro skip is available
-        /// </summary>
-        bool IsIntroSkipAvailable();
-
-        /// <summary>
-        ///     Check if outro skip is available
-        /// </summary>
-        bool IsOutroSkipAvailable();
-
-        /// <summary>
-        ///     Get intro segment timing
-        /// </summary>
-        (TimeSpan? start, TimeSpan? end) GetIntroSegment();
-
-        /// <summary>
-        ///     Get outro segment timing
-        /// </summary>
-        (TimeSpan? start, TimeSpan? end) GetOutroSegment();
-
-        /// <summary>
-        ///     Skip the intro
-        /// </summary>
-        Task SkipIntroAsync();
-
-        /// <summary>
-        ///     Skip the outro
-        /// </summary>
-        Task SkipOutroAsync();
-
-        /// <summary>
-        ///     Handle auto-skip if enabled
-        /// </summary>
-        Task HandleAutoSkipAsync(TimeSpan currentPosition);
-
-        /// <summary>
-        ///     Check if position is within a skippable segment
-        /// </summary>
-        SkipSegmentType? GetCurrentSegmentType(TimeSpan position);
-
-        /// <summary>
-        ///     Event raised when segment availability changes
-        /// </summary>
-        event EventHandler SegmentAvailabilityChanged;
-
-        /// <summary>
-        ///     Event raised when a segment is skipped
-        /// </summary>
-        event EventHandler<SkipSegmentType> SegmentSkipped;
     }
 
     /// <summary>

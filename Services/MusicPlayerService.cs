@@ -12,6 +12,9 @@ using Microsoft.Extensions.Logging;
 using Windows.Media;
 using Windows.Media.Core;
 using Windows.Media.Playback;
+using Windows.Storage.Streams;
+using Windows.Web.Http;
+using Windows.Web.Http.Headers;
 
 namespace Gelatinarm.Services
 {
@@ -27,11 +30,12 @@ namespace Gelatinarm.Services
 
         private readonly IPlaybackQueueService _queueService;
         private readonly IServiceProvider _serviceProvider;
-        private readonly ISystemMediaIntegrationService _systemMediaService;
         private readonly IUserProfileService _userProfileService;
         private MediaSourceInfo _currentMediaSource;
         private string _currentPlaySessionId;
         private bool _isInFallbackMode = false;
+        private SystemMediaTransportControls _systemMediaTransportControls;
+        private DateTime _smtcSuppressStoppedUntilUtc = DateTime.MinValue;
 
         private DateTime _lastPlaybackStartTime = DateTime.MinValue;
         private CancellationTokenSource _playbackCancellationTokenSource;
@@ -51,8 +55,7 @@ namespace Gelatinarm.Services
             IPreferencesService preferencesService,
             IMediaOptimizationService mediaOptimizationService,
             IPlaybackQueueService queueService,
-            IMediaControlService mediaControlService,
-            ISystemMediaIntegrationService systemMediaService) : base(logger)
+            IMediaControlService mediaControlService) : base(logger)
         {
             _serviceProvider = serviceProvider;
             _apiClient = apiClient;
@@ -64,7 +67,6 @@ namespace Gelatinarm.Services
             _mediaOptimizationService = mediaOptimizationService;
             _queueService = queueService;
             _mediaControlService = mediaControlService;
-            _systemMediaService = systemMediaService;
 
             // Don't subscribe to events in constructor - wait until audio playback starts
             // Initialize();
@@ -123,7 +125,7 @@ namespace Gelatinarm.Services
                 {
                     Logger.LogInformation("Resetting repeat-one mode for new queue");
                     _mediaControlService.SetRepeatMode(RepeatMode.None);
-                    _systemMediaService.SetRepeatMode(RepeatMode.None);
+                    SetRepeatMode(RepeatMode.None);
                     UpdateTransportControlsState();
                     RepeatModeChanged?.Invoke(this, RepeatMode.None);
                 }
@@ -177,13 +179,13 @@ namespace Gelatinarm.Services
                     StopProgressReporting();
 
                     // Clear System Media Transport Controls display
-                    _systemMediaService.ClearDisplay();
+                    ClearDisplay();
 
                     // Dispose SMTC when stopping playback
                     if (_isSmtcInitialized)
                     {
                         Logger.LogInformation("Disposing System Media Transport Controls");
-                        _systemMediaService.Dispose();
+                        DisposeSystemMediaTransportControls();
                         _isSmtcInitialized = false;
                     }
 
@@ -333,7 +335,7 @@ namespace Gelatinarm.Services
                 try
                 {
                     var newMode = _mediaControlService.CycleRepeatMode();
-                    _systemMediaService.SetRepeatMode(newMode);
+                    SetRepeatMode(newMode);
                     UpdateTransportControlsState();
 
                     // Notify UI to update
@@ -355,7 +357,7 @@ namespace Gelatinarm.Services
                 try
                 {
                     _queueService.SetShuffle(!_queueService.IsShuffleMode);
-                    _systemMediaService.SetShuffleEnabled(_queueService.IsShuffleMode);
+                    SetShuffleEnabled(_queueService.IsShuffleMode);
                     UpdateTransportControlsState();
 
                     // Notify UI to update
@@ -377,7 +379,7 @@ namespace Gelatinarm.Services
                 try
                 {
                     _queueService.SetShuffle(enabled);
-                    _systemMediaService.SetShuffleEnabled(enabled);
+                    SetShuffleEnabled(enabled);
                     UpdateTransportControlsState();
 
                     // Notify UI to update
@@ -444,7 +446,7 @@ namespace Gelatinarm.Services
             {
                 Logger.LogInformation("Resetting repeat-one mode for new queue");
                 _mediaControlService.SetRepeatMode(RepeatMode.None);
-                _systemMediaService.SetRepeatMode(RepeatMode.None);
+                SetRepeatMode(RepeatMode.None);
                 UpdateTransportControlsState();
                 RepeatModeChanged?.Invoke(this, RepeatMode.None);
             }
@@ -467,7 +469,7 @@ namespace Gelatinarm.Services
                     };
 
                     _mediaControlService.SetRepeatMode(newMode);
-                    _systemMediaService.SetRepeatMode(newMode);
+                    SetRepeatMode(newMode);
                     UpdateTransportControlsState();
                     await Task.CompletedTask;
                 }
@@ -491,7 +493,7 @@ namespace Gelatinarm.Services
             UnsubscribeFromEvents();
 
             // Dispose sub-services
-            _systemMediaService?.Dispose();
+            DisposeSystemMediaTransportControls();
             (_mediaControlService as IDisposable)?.Dispose();
         }
 
@@ -514,10 +516,6 @@ namespace Gelatinarm.Services
 
             _queueService.QueueChanged += OnQueueChanged;
             _queueService.QueueIndexChanged += OnQueueIndexChanged;
-
-            _systemMediaService.ButtonPressed += OnSystemMediaButtonPressed;
-            _systemMediaService.ShuffleEnabledChangeRequested += OnShuffleChangeRequested;
-            _systemMediaService.RepeatModeChangeRequested += OnRepeatModeChangeRequested;
 
             _isSubscribedToEvents = true;
         }
@@ -548,12 +546,7 @@ namespace Gelatinarm.Services
                 _queueService.QueueIndexChanged -= OnQueueIndexChanged;
             }
 
-            if (_systemMediaService != null)
-            {
-                _systemMediaService.ButtonPressed -= OnSystemMediaButtonPressed;
-                _systemMediaService.ShuffleEnabledChangeRequested -= OnShuffleChangeRequested;
-                _systemMediaService.RepeatModeChangeRequested -= OnRepeatModeChangeRequested;
-            }
+            UnwireSystemMediaTransportControls();
 
             _isSubscribedToEvents = false;
         }
@@ -587,12 +580,25 @@ namespace Gelatinarm.Services
         private void OnNowPlayingChanged(object sender, BaseItemDto item)
         {
             NowPlayingChanged?.Invoke(this, item);
+
+            if (item != null && IsAudioItem(item))
+            {
+                if (!_isSmtcInitialized && _mediaControlService.MediaPlayer != null)
+                {
+                    Logger.LogInformation($"Initializing System Media Transport Controls for music playback: {item.Name}");
+                    InitializeSystemMediaTransportControls(_mediaControlService.MediaPlayer);
+                    _isSmtcInitialized = true;
+                }
+
+                FireAndForget(() => UpdateDisplay(item), "UpdateSystemMediaDisplay");
+                UpdateTransportControlsState();
+            }
         }
 
         private void OnPlaybackStateChanged(object sender, MediaPlaybackState state)
         {
             PlaybackStateChanged?.Invoke(this, state);
-            _systemMediaService.UpdatePlaybackStatus(state);
+            UpdatePlaybackStatus(state);
         }
 
         private void OnQueueChanged(object sender, List<BaseItemDto> queue)
@@ -627,16 +633,21 @@ namespace Gelatinarm.Services
             if (!_isSmtcInitialized && currentItem != null && IsAudioItem(currentItem))
             {
                 Logger.LogInformation($"Initializing System Media Transport Controls for music playback: {currentItem.Name}");
-                _systemMediaService.Initialize(_mediaControlService.MediaPlayer);
+                InitializeSystemMediaTransportControls(_mediaControlService.MediaPlayer);
                 _isSmtcInitialized = true;
             }
 
             // Update system media transport controls (only for music)
             if (currentItem != null && IsAudioItem(currentItem))
             {
-                FireAndForget(() => _systemMediaService.UpdateDisplay(currentItem),
+                FireAndForget(() => UpdateDisplay(currentItem),
                     "UpdateSystemMediaDisplay");
                 UpdateTransportControlsState();
+                FireAndForget(async () =>
+                {
+                    await Task.Delay(300).ConfigureAwait(false);
+                    UpdateTransportControlsState();
+                }, "UpdateTransportControlsStateDelayed");
 
                 // Start playback reporting
                 FireAndForgetSafe(() => StartPlaybackReporting(), "StartPlaybackReporting");
@@ -692,6 +703,312 @@ namespace Gelatinarm.Services
 
             // Notify UI to update
             RepeatModeChanged?.Invoke(this, newMode);
+        }
+
+        private void InitializeSystemMediaTransportControls(MediaPlayer mediaPlayer)
+        {
+            if (mediaPlayer == null)
+            {
+                Logger.LogWarning("Cannot initialize SMTC - MediaPlayer is null");
+                return;
+            }
+
+            _systemMediaTransportControls = mediaPlayer.SystemMediaTransportControls;
+            if (_systemMediaTransportControls == null)
+            {
+                Logger.LogWarning("MediaPlayer.SystemMediaTransportControls returned null");
+                return;
+            }
+
+            _systemMediaTransportControls.IsEnabled = true;
+            _systemMediaTransportControls.IsPauseEnabled = true;
+            _systemMediaTransportControls.IsPlayEnabled = true;
+            _systemMediaTransportControls.IsNextEnabled = true;
+            _systemMediaTransportControls.IsPreviousEnabled = true;
+            _systemMediaTransportControls.IsStopEnabled = true;
+
+            _systemMediaTransportControls.ButtonPressed += OnSystemMediaTransportControlsButtonPressed;
+            _systemMediaTransportControls.ShuffleEnabledChangeRequested += OnShuffleEnabledChangeRequested;
+            _systemMediaTransportControls.AutoRepeatModeChangeRequested += OnAutoRepeatModeChangeRequested;
+
+            Logger.LogInformation("System Media Transport Controls initialized");
+            UpdateTransportControlsState();
+        }
+
+        private void UnwireSystemMediaTransportControls()
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            _systemMediaTransportControls.ButtonPressed -= OnSystemMediaTransportControlsButtonPressed;
+            _systemMediaTransportControls.ShuffleEnabledChangeRequested -= OnShuffleEnabledChangeRequested;
+            _systemMediaTransportControls.AutoRepeatModeChangeRequested -= OnAutoRepeatModeChangeRequested;
+        }
+
+        private void UpdatePlaybackStatus(MediaPlaybackState state)
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            if ((state == MediaPlaybackState.None || state == MediaPlaybackState.Paused) &&
+                DateTime.UtcNow < _smtcSuppressStoppedUntilUtc)
+            {
+                Logger.LogDebug("Suppressing SMTC stopped status during transition");
+                return;
+            }
+
+            var context = CreateErrorContext("UpdatePlaybackStatus", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    _systemMediaTransportControls.PlaybackStatus = state switch
+                    {
+                        MediaPlaybackState.Playing => MediaPlaybackStatus.Playing,
+                        MediaPlaybackState.Paused => MediaPlaybackStatus.Paused,
+                        MediaPlaybackState.None => MediaPlaybackStatus.Stopped,
+                        MediaPlaybackState.Opening => MediaPlaybackStatus.Changing,
+                        MediaPlaybackState.Buffering => MediaPlaybackStatus.Changing,
+                        _ => MediaPlaybackStatus.Closed
+                    };
+
+                    Logger.LogDebug($"Updated SMTC playback status to: {_systemMediaTransportControls.PlaybackStatus}");
+                    UpdateTransportControlsState();
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private async Task UpdateDisplay(BaseItemDto item)
+        {
+            if (_systemMediaTransportControls == null || item == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("UpdateDisplay", ErrorCategory.Media);
+            try
+            {
+                await UIHelper.RunOnUIThreadAsync(async () =>
+                {
+                    var updater = _systemMediaTransportControls.DisplayUpdater;
+                    if (updater == null)
+                    {
+                        Logger.LogWarning("SystemMediaTransportControls.DisplayUpdater returned null");
+                        return;
+                    }
+
+                    updater.Type = MediaPlaybackType.Music;
+                    updater.MusicProperties.Title = item.Name ?? "Unknown Title";
+                    updater.MusicProperties.Artist = item.AlbumArtist ?? item.Artists?.FirstOrDefault() ?? "Unknown Artist";
+                    updater.MusicProperties.AlbumTitle = item.Album ?? string.Empty;
+
+                    await SetAlbumArtwork(updater, item);
+                    updater.Update();
+
+                    Logger.LogInformation($"Updated System Media Transport Controls: {item.Name}");
+                }, logger: Logger).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false);
+            }
+        }
+
+        private void UpdateButtonStates(bool canGoNext, bool canGoPrevious)
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("UpdateButtonStates", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        if (!_systemMediaTransportControls.IsEnabled)
+                        {
+                            _systemMediaTransportControls.IsEnabled = true;
+                        }
+
+                        _systemMediaTransportControls.IsNextEnabled = canGoNext;
+                        _systemMediaTransportControls.IsPreviousEnabled = canGoPrevious;
+                    }, logger: Logger).ConfigureAwait(false);
+
+                    Logger.LogInformation($"Updated transport controls buttons: Next={canGoNext}, Previous={canGoPrevious}");
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private void SetShuffleEnabled(bool enabled)
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("SetShuffleEnabled", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        _systemMediaTransportControls.ShuffleEnabled = enabled;
+                    }, logger: Logger).ConfigureAwait(false);
+
+                    Logger.LogInformation($"SMTC shuffle set to: {enabled}");
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private void SetRepeatMode(RepeatMode mode)
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("SetRepeatMode", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        _systemMediaTransportControls.AutoRepeatMode = mode switch
+                        {
+                            RepeatMode.None => MediaPlaybackAutoRepeatMode.None,
+                            RepeatMode.One => MediaPlaybackAutoRepeatMode.Track,
+                            RepeatMode.All => MediaPlaybackAutoRepeatMode.List,
+                            _ => MediaPlaybackAutoRepeatMode.None
+                        };
+                    }, logger: Logger).ConfigureAwait(false);
+
+                    Logger.LogInformation($"SMTC repeat mode set to: {_systemMediaTransportControls.AutoRepeatMode}");
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private void ClearDisplay()
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("ClearDisplay", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    _systemMediaTransportControls.DisplayUpdater.ClearAll();
+                    _systemMediaTransportControls.PlaybackStatus = MediaPlaybackStatus.Closed;
+                    _systemMediaTransportControls.DisplayUpdater.Update();
+                    Logger.LogInformation("Cleared System Media Transport Controls display");
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private void DisposeSystemMediaTransportControls()
+        {
+            if (_systemMediaTransportControls == null)
+            {
+                return;
+            }
+
+            UnwireSystemMediaTransportControls();
+            _systemMediaTransportControls.DisplayUpdater.ClearAll();
+            _systemMediaTransportControls.PlaybackStatus = MediaPlaybackStatus.Closed;
+            _systemMediaTransportControls.DisplayUpdater.Update();
+            _systemMediaTransportControls.IsEnabled = false;
+            _systemMediaTransportControls = null;
+        }
+
+        private void OnSystemMediaTransportControlsButtonPressed(SystemMediaTransportControls sender,
+            SystemMediaTransportControlsButtonPressedEventArgs args)
+        {
+            Logger.LogInformation($"SMTC Button pressed: {args.Button}");
+            OnSystemMediaButtonPressed(this, args.Button);
+        }
+
+        private void OnShuffleEnabledChangeRequested(SystemMediaTransportControls sender,
+            ShuffleEnabledChangeRequestedEventArgs args)
+        {
+            Logger.LogInformation("SMTC Shuffle change requested");
+            OnShuffleChangeRequested(this, !sender.ShuffleEnabled);
+        }
+
+        private void OnAutoRepeatModeChangeRequested(SystemMediaTransportControls sender,
+            AutoRepeatModeChangeRequestedEventArgs args)
+        {
+            Logger.LogInformation($"SMTC Repeat mode change requested: {args.RequestedAutoRepeatMode}");
+            _systemMediaTransportControls.AutoRepeatMode = args.RequestedAutoRepeatMode;
+            OnRepeatModeChangeRequested(this, args.RequestedAutoRepeatMode);
+        }
+
+        private async Task SetAlbumArtwork(SystemMediaTransportControlsDisplayUpdater updater, BaseItemDto item)
+        {
+            try
+            {
+                var hasPrimaryImage = item.ImageTags?.AdditionalData != null &&
+                                      item.ImageTags.AdditionalData.ContainsKey("Primary");
+
+                string imageUrl = null;
+                if (item.AlbumId.HasValue && item.AlbumPrimaryImageTag != null)
+                {
+                    imageUrl = ImageHelper.GetImageUrl(item.AlbumId.Value.ToString(), "Primary");
+                }
+                else if (item.Id.HasValue && hasPrimaryImage)
+                {
+                    imageUrl = ImageHelper.GetImageUrl(item.Id.Value.ToString(), "Primary");
+                }
+                else if (item.AlbumId.HasValue)
+                {
+                    imageUrl = ImageHelper.GetImageUrl(item.AlbumId.Value.ToString(), "Primary");
+                }
+
+                if (!string.IsNullOrEmpty(imageUrl))
+                {
+                    updater.Thumbnail = RandomAccessStreamReference.CreateFromUri(new Uri(imageUrl));
+                    Logger.LogInformation("Set SMTC thumbnail successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to set album artwork for SMTC");
+            }
         }
 
 
@@ -751,6 +1068,7 @@ namespace Gelatinarm.Services
                         if (currentItem?.Type == BaseItemDto_Type.Audio && !_isInFallbackMode)
                         {
                             Logger.LogInformation("Attempting automatic transcoding fallback for audio playback");
+                            _smtcSuppressStoppedUntilUtc = DateTime.UtcNow.AddSeconds(3);
                             await PlayItemWithTranscodingFallback(currentItem).ConfigureAwait(false);
                         }
                     }
@@ -969,7 +1287,15 @@ namespace Gelatinarm.Services
                 if (mediaSource.SupportsDirectStream == true && !string.IsNullOrEmpty(mediaSource.Path))
                 {
                     // Prefer direct streaming for audio files when supported
-                    if (mediaSource.Path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                    if (item.Type == BaseItemDto_Type.Audio && mediaSource.Protocol == MediaSourceInfo_Protocol.File)
+                    {
+                        mediaUrl = BuildDirectAudioStreamUrl(item, mediaSource, serverUrl, accessToken);
+                        if (!string.IsNullOrEmpty(mediaUrl))
+                        {
+                            Logger.LogInformation("Using audio stream endpoint for direct playback");
+                        }
+                    }
+                    else if (mediaSource.Path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                     {
                         mediaUrl = mediaSource.Path;
                     }
@@ -1043,6 +1369,13 @@ namespace Gelatinarm.Services
 
                 if (!string.IsNullOrEmpty(mediaUrl))
                 {
+                    var originalMediaUrl = mediaUrl;
+                    mediaUrl = UrlHelper.AppendApiKey(mediaUrl, accessToken);
+                    if (!string.Equals(originalMediaUrl, mediaUrl, StringComparison.Ordinal))
+                    {
+                        Logger.LogInformation("Appended ApiKey to media URL for authentication");
+                    }
+
                     Logger.LogInformation($"Playing media from URL: {mediaUrl}");
                     Logger.LogInformation($"Item type: {item.Type}, MediaType: {item.MediaType}");
                     Logger.LogInformation($"Container: {mediaSource.Container}");
@@ -1087,6 +1420,11 @@ namespace Gelatinarm.Services
                                     $"Using simple source for {mediaSource.Container} audio (server may return direct file)");
                             }
                         }
+                    }
+
+                    if (isAudio && useSimpleSource && !mediaUrl.Contains("/universal"))
+                    {
+                        await LogMediaUrlHeadersAsync(mediaUrl, mediaSource.Container).ConfigureAwait(false);
                     }
 
                     if (useSimpleSource)
@@ -1156,6 +1494,90 @@ namespace Gelatinarm.Services
             }
         }
 
+        private async Task LogMediaUrlHeadersAsync(string mediaUrl, string container)
+        {
+            if (string.IsNullOrEmpty(mediaUrl))
+            {
+                return;
+            }
+
+            try
+            {
+                using var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(new HttpMediaTypeWithQualityHeaderValue("*/*"));
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var response = await httpClient
+                    .GetAsync(new Uri(mediaUrl), HttpCompletionOption.ResponseHeadersRead)
+                    .AsTask(cts.Token)
+                    .ConfigureAwait(false);
+
+                var contentType = response.Content?.Headers?.ContentType?.MediaType;
+                var contentLength = response.Content?.Headers?.ContentLength;
+
+                Logger.LogInformation(
+                    $"[MEDIA-URL-HEADERS] Status={(int)response.StatusCode} {response.StatusCode}, " +
+                    $"ContentType={contentType ?? "unknown"}, ContentLength={contentLength?.ToString() ?? "unknown"}");
+
+                if (response.StatusCode == HttpStatusCode.Unauthorized ||
+                    response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    Logger.LogWarning("[MEDIA-URL-HEADERS] Authentication failed for direct media URL");
+                }
+
+                if (!string.IsNullOrEmpty(container) &&
+                    !string.IsNullOrEmpty(contentType) &&
+                    !contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.LogWarning(
+                        $"[MEDIA-URL-HEADERS] Unexpected content type for {container} media: {contentType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "[MEDIA-URL-HEADERS] Failed to probe media URL headers");
+            }
+        }
+
+        private string BuildDirectAudioStreamUrl(
+            BaseItemDto item,
+            MediaSourceInfo mediaSource,
+            string serverUrl,
+            string accessToken)
+        {
+            if (!item?.Id.HasValue ?? true)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(serverUrl))
+            {
+                return null;
+            }
+
+            var baseUrl = serverUrl.TrimEnd('/');
+            var queryParts = new List<string> { "static=true" };
+
+            if (!string.IsNullOrEmpty(mediaSource?.Id))
+            {
+                queryParts.Add($"mediaSourceId={Uri.EscapeDataString(mediaSource.Id)}");
+            }
+
+            var deviceId = _deviceService.GetDeviceId();
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                queryParts.Add($"deviceId={Uri.EscapeDataString(deviceId)}");
+            }
+
+            var url = $"{baseUrl}/Audio/{item.Id.Value}/stream";
+            if (queryParts.Count > 0)
+            {
+                url += "?" + string.Join("&", queryParts);
+            }
+
+            return UrlHelper.AppendApiKey(url, accessToken);
+        }
 
         private void UpdateTransportControlsState()
         {
@@ -1171,11 +1593,11 @@ namespace Gelatinarm.Services
                                        (isShuffleMode && queue.Count > 1);
                 var shouldEnablePrevious = currentIndex > 0 || isRepeatAll || (isShuffleMode && queue.Count > 1);
 
-                _systemMediaService.UpdateButtonStates(shouldEnableNext, shouldEnablePrevious);
+                UpdateButtonStates(shouldEnableNext, shouldEnablePrevious);
 
                 // Ensure shuffle and repeat states are maintained
-                _systemMediaService.SetShuffleEnabled(isShuffleMode);
-                _systemMediaService.SetRepeatMode(_mediaControlService.RepeatMode);
+                SetShuffleEnabled(isShuffleMode);
+                SetRepeatMode(_mediaControlService.RepeatMode);
 
                 Logger.LogInformation(
                     $"Updated transport controls: Next={shouldEnableNext}, Previous={shouldEnablePrevious}, Shuffle={isShuffleMode}, Repeat={_mediaControlService.RepeatMode}, QueueIndex={currentIndex}/{queue.Count}");
@@ -1431,6 +1853,7 @@ namespace Gelatinarm.Services
                         var playbackItem = new MediaPlaybackItem(source);
 
                         Logger.LogInformation("Clearing current MediaPlayer source");
+                        _smtcSuppressStoppedUntilUtc = DateTime.UtcNow.AddSeconds(3);
                         _mediaControlService.ClearMediaSource();
                         await Task.Delay(MediaConstants.MEDIA_SOURCE_CLEAR_DELAY_MS).ConfigureAwait(false);
 

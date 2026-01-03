@@ -142,11 +142,9 @@
     <!-- Helpers -->
     <Compile Include="Helpers\AsyncHelper.cs" />
     <Compile Include="Helpers\BufferingStateCoordinator.cs" />
-    <Compile Include="Helpers\PlaybackStateOrchestrator.cs" />
+    <Compile Include="Helpers\PlaybackStateCoordinator.cs" />
     <Compile Include="Helpers\PlaybackSessionState.cs" />
     <Compile Include="Helpers\PlaybackSessionSnapshot.cs" />
-    <Compile Include="Helpers\ResumeFlowCoordinator.cs" />
-    <Compile Include="Helpers\ResumeRetryCoordinator.cs" />
     <Compile Include="Helpers\SeekCompletionCoordinator.cs" />
     <Compile Include="Helpers\ImageHelper.cs" />
     <Compile Include="Helpers\MediaPlaybackHelper.cs" />
@@ -191,7 +189,7 @@
     <Compile Include="Services\CacheManagerService.cs" />
     <Compile Include="Services\DeviceProfileService.cs" />
     <Compile Include="Services\FileCacheProvider.cs" />
-    <Compile Include="Services\EpisodeQueueService.cs" />
+    <Compile Include="Services\MediaQueueService.cs" />
     <Compile Include="Services\ImageLoadingService.cs" />
     <Compile Include="Services\MediaDiscoveryService.cs" />
     <Compile Include="Services\MediaOptimizationService.cs" />
@@ -203,22 +201,14 @@
     <Compile Include="Services\SystemMonitorService.cs" />
     <Compile Include="Services\UnifiedDeviceService.cs" />
     <Compile Include="Services\UserProfileService.cs" />
-    <Compile Include="Services\PlaybackQueueService.cs" />
     <Compile Include="Services\MediaControlService.cs" />
-    <Compile Include="Services\SystemMediaIntegrationService.cs" />
     <Compile Include="Services\DialogService.cs" />
     <Compile Include="Services\ErrorHandlingService.cs" />
-    <Compile Include="Services\MediaControllerService.cs" />
-    <Compile Include="Services\MediaNavigationService.cs" />
+    <Compile Include="Services\ControllerInputService.cs" />
     <Compile Include="Services\PlaybackControlService.cs" />
-    <Compile Include="Services\PlaybackRestartService.cs" />
     <Compile Include="Services\PlaybackResumeCoordinator.cs" />
-    <Compile Include="Services\PlaybackResumeModels.cs" />
     <Compile Include="Services\PlaybackSourceResolver.cs" />
-    <Compile Include="Services\PlaybackStatisticsService.cs" />
-    <Compile Include="Services\SkipSegmentService.cs" />
     <Compile Include="Services\SubtitleService.cs" />
-    <Compile Include="Services\IUserDataService.cs" />
     <Compile Include="Services\UserDataService.cs" />
     <!-- ViewModels -->
     <Compile Include="ViewModels\BaseViewModel.cs" />

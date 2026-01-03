@@ -11,7 +11,7 @@ Gelatinarm is a Jellyfin client application built for Xbox using Universal Windo
 - **Key Dependencies**: Jellyfin SDK, Windows.Media.Playback
 - **Navigation**: NavigationService (singleton)
 - **Error Handling**: ErrorHandlingService (centralized)
-- **Controller Input**: UnifiedDeviceService + MediaControllerService
+- **Controller Input**: UnifiedDeviceService + ControllerInputService
 
 ## Table of Contents
 1. [Project Structure](#project-structure)
@@ -132,7 +132,6 @@ Services provide reusable functionality across the application:
 - **MediaPlaybackService** - Control media playback and session management
 - **MusicPlayerService** - Persistent playback controls
 - **MediaOptimizationService** - Video/audio quality optimization
-- **EpisodeQueueService** - TV episode queue management
 - **MediaControlService** - Low-level MediaPlayer control
 
 #### Navigation & State
@@ -151,19 +150,17 @@ Services provide reusable functionality across the application:
 #### Playback Support
 - **PlaybackControlService** - Playback setup, stream selection, and restart flow
 - **PlaybackSourceResolver** - Selects playback source and resolves streaming strategy
-- **PlaybackResumeCoordinator** - Centralized resume strategy across stream types
-- **PlaybackResumeModels** - Resume policies, retry config, and verification helpers
-- **PlaybackRestartService** - Restart handling for track/subtitle changes with resume carry-over
-- **PlaybackQueueService** - Playback queue management
+- **PlaybackResumeCoordinator** - Centralized resume strategy (includes resume models)
+- **MediaQueueService** - Unified playback + episode queue management and navigation
 - **SubtitleService** - Subtitle track handling
-- **SkipSegmentService** - Intro/outro skip functionality
-- **PlaybackStatisticsService** - Real-time playback metrics display
-- **MediaNavigationService** - Next/previous navigation
-- **MediaControllerService** - Xbox controller event-based input handling
+- **ControllerInputService** - Xbox controller event-based input handling
+
+#### Playback UI
+- **MediaPlayerViewModel** - Intro/outro skip handling and playback stats overlay
 
 #### UI Support
 - **DialogService** - Message dialog display
-- **SystemMediaIntegrationService** - System media controls
+- **MusicPlayerService** - System media controls (SMTC) for audio playback
 - **ErrorHandlingService** - Unified error handling and user notification
 
 #### Network & Performance
@@ -206,10 +203,9 @@ Services provide reusable functionality across the application:
 - **TimeFormattingHelper** - Time formatting utilities
 - **UIHelper** - UI helper functions
 - **ServiceLocator** - Shared service resolution for non-injected classes
-- **PlaybackStateOrchestrator** - Unified playback state transitions for the UI
-- **BufferingStateCoordinator** - Buffering lifecycle and timeout logic
-- **ResumeFlowCoordinator** - Resume acceptance and completion reporting
-- **ResumeRetryCoordinator** - Retry scheduling and tolerance evaluation
+- **PlaybackStateCoordinator** - PlaybackStateChanged snapshotting and de-duplication for UI updates
+- **BufferingStateCoordinator** - Buffering lifecycle, seek-aware timeout logic, and HLS fixes
+- **PlaybackResumeCoordinator** - Resume acceptance and retry scheduling
 - **SeekCompletionCoordinator** - Seek completion logging and validation
 
 ### Constants/ (Application Values)
@@ -297,7 +293,7 @@ View ← ViewModel ← Service ← Response Data ←
   - MediaPlaybackService, MediaControlService
 - **Transient**: ViewModels and stateless services
   - All ViewModels
-  - MediaControllerService, DialogService
+  - ControllerInputService, DialogService
 
 ### Data Caching
 - **CacheManagerService**: In-memory LRU cache with size limits
@@ -307,7 +303,7 @@ View ← ViewModel ← Service ← Response Data ←
 - **Image Caching**: Handled by CachedImage control with FileCacheProvider
 
 ### Xbox Optimization
-- **Controller Input**: Event-based gamepad input handling via MediaControllerService
+- **Controller Input**: Event-based gamepad input handling via ControllerInputService
 - **Focus Management**: Automatic focus handling
 - **Performance**: Memory monitoring and optimization
 - **Media Codecs**: Xbox-specific codec and HDR support
@@ -333,10 +329,10 @@ The application provides comprehensive Xbox controller support through a layered
 - **Responsibilities**: Xbox detection, controller state tracking, hardware capabilities
 - **Location**: `/Services/UnifiedDeviceService.cs`
 
-#### MediaControllerService  
+#### ControllerInputService  
 - **Purpose**: Media playback control via gamepad
 - **Responsibilities**: Button-to-action mapping, playback control, UI awareness
-- **Location**: `/Services/MediaControllerService.cs`
+- **Location**: `/Services/ControllerInputService.cs`
 
 #### BasePage
 - **Purpose**: Controller support for all pages
@@ -353,7 +349,7 @@ The application provides comprehensive Xbox controller support through a layered
 1. **App Startup**: UnifiedDeviceService detects Xbox and monitors gamepads
 2. **Page Navigation**: BasePage configures controller support automatically
 3. **User Input**: Button presses flow through appropriate services
-4. **Media Playback**: MediaControllerService handles playback controls
+4. **Media Playback**: ControllerInputService handles playback controls
 
 ### Button Mappings (Media Player)
 

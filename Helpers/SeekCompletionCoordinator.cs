@@ -30,9 +30,12 @@ namespace Gelatinarm.Helpers
             _logger.LogInformation($"NaturalDuration after seek: {context.NaturalDuration:hh\\:mm\\:ss}, " +
                                    $"MetadataDuration: {context.MetadataDuration:hh\\:mm\\:ss}");
 
-            if (context.IsHlsStream && !context.HasPerformedInitialSeek)
+            if (!context.HasPerformedInitialSeek)
             {
-                context.SetActualResumePosition?.Invoke(context.Position);
+                if (context.IsHlsStream)
+                {
+                    context.SetActualResumePosition?.Invoke(context.Position);
+                }
                 context.MarkInitialSeekPerformed?.Invoke();
             }
 

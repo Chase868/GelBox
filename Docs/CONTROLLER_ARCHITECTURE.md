@@ -52,12 +52,12 @@ event EventHandler<GamepadButtonStateChangedEventArgs> ButtonStateChanged
 event EventHandler<SystemEventArgs> SystemEvent
 ```
 
-### 2. MediaControllerService
-**Location**: `/Services/MediaControllerService.cs`  
-**Interface**: `IMediaControllerService`
+### 2. ControllerInputService
+**Location**: `/Services/ControllerInputService.cs`  
+**Interface**: `IControllerInputService`
 
 #### Purpose
-The MediaControllerService specializes in media playback control via gamepad, translating controller buttons into media actions during video/audio playback.
+The ControllerInputService specializes in media playback control via gamepad, translating controller buttons into media actions during video/audio playback.
 
 #### Key Responsibilities
 - **Button Mapping**
@@ -205,10 +205,10 @@ NavigationService navigates to page
 ### 3. Media Playback
 ```
 MediaPlayerPage loaded
-├── Create MediaControllerService
+├── Create ControllerInputService
 ├── Subscribe to ActionTriggered events
 ├── Handle KeyDown events
-│   ├── MediaControllerService.HandleKeyDownAsync()
+│   ├── ControllerInputService.HandleKeyDownAsync()
 │   ├── Map key to action
 │   └── Fire ActionTriggered event
 └── MediaPlayerPage handles action
@@ -222,7 +222,7 @@ User presses gamepad button
 │   ├── Updates CurrentButtonState
 │   └── Fires ButtonStateChanged event
 ├── Page KeyDown event (for media)
-│   └── MediaControllerService translates to action
+│   └── ControllerInputService translates to action
 └── UI responds to input
 ```
 
@@ -263,13 +263,13 @@ ControllerInputHelper.ConfigureTextBoxForController(
 ### 3. Media Controller Integration
 ```csharp
 // In MediaPlayerPage
-private IMediaControllerService _controllerService;
+private IControllerInputService _controllerService;
 
 protected override void OnNavigatedTo(NavigationEventArgs e)
 {
     base.OnNavigatedTo(e);
     
-    _controllerService = GetRequiredService<IMediaControllerService>();
+    _controllerService = GetRequiredService<IControllerInputService>();
     _controllerService.ActionTriggered += OnControllerAction;
     
     this.KeyDown += OnKeyDown;
@@ -383,7 +383,7 @@ This feature provides quick access to music controls from deep within navigation
          │                               │
          ▼                               ▼
 ┌─────────────────────┐         ┌──────────────────────────┐
-│      BasePage       │         │  MediaControllerService  │
+│      BasePage       │         │  ControllerInputService  │
 │ • Lifecycle mgmt    │         │ • Button → Action mapping│
 │ • Back navigation   │         │ • Playback control       │
 │ • Focus helpers     │         │ • Control visibility     │
@@ -403,7 +403,7 @@ This feature provides quick access to music controls from deep within navigation
 The controller architecture provides a layered approach to Xbox gamepad input:
 
 1. **UnifiedDeviceService** - Low-level platform and device management
-2. **MediaControllerService** - Specialized media playback control
+2. **ControllerInputService** - Specialized media playback control
 3. **BasePage** - Page-level controller support infrastructure
 4. **ControllerInputHelper** - UI control configuration utilities
 

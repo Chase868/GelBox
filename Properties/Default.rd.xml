@@ -116,7 +116,7 @@
         <Type Name="Gelatinarm.Services.IEpisodeQueueService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IErrorHandlingService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IImageLoadingService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.IMediaControllerService" Dynamic="Required All" />
+        <Type Name="Gelatinarm.Services.IControllerInputService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IMediaControlService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IMediaDiscoveryService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IMediaNavigationService" Dynamic="Required All" />
@@ -130,11 +130,8 @@
         <Type Name="Gelatinarm.Services.INetworkMonitor" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IPlaybackControlService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IPlaybackQueueService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.IPlaybackStatisticsService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IPreferencesService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.ISkipSegmentService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.ISubtitleService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.ISystemMediaIntegrationService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.ISystemMonitorService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IUnifiedDeviceService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.IUserDataService" Dynamic="Required All" />
@@ -156,17 +153,12 @@
         <Type Name="Gelatinarm.Services.CacheManagerService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.DeviceProfileService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.DialogService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.EpisodeQueueService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.MediaControllerService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.MediaNavigationService" Dynamic="Required All" />
+        <Type Name="Gelatinarm.Services.ControllerInputService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.MediaOptimizationService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.MusicPlayerService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.PlaybackControlService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.PlaybackQueueService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.PlaybackStatisticsService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.SkipSegmentService" Dynamic="Required All" />
+        <Type Name="Gelatinarm.Services.MediaQueueService" Dynamic="Required All" />
         <Type Name="Gelatinarm.Services.SubtitleService" Dynamic="Required All" />
-        <Type Name="Gelatinarm.Services.SystemMediaIntegrationService" Dynamic="Required All" />
 
         <!-- Base Classes -->
         <Type Name="Gelatinarm.Services.BaseService" Dynamic="Required All" />

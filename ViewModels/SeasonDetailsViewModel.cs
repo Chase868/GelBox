@@ -745,16 +745,29 @@ namespace Gelatinarm.ViewModels
             IsShuffleButtonVisible = false;
             IsMarkWatchedButtonVisible = true;
 
-            if (userData?.PlayedPercentage > 0 &&
-                userData.PlayedPercentage < MediaConstants.WATCHED_PERCENTAGE_THRESHOLD)
+            var playbackTicks = userData?.PlaybackPositionTicks ?? 0;
+            var playedPercentage = userData?.PlayedPercentage ?? 0;
+            var isPlayed = userData?.Played == true;
+            var hasProgress = playbackTicks > 0 || playedPercentage > 0;
+            var isBelowWatchedThreshold = playedPercentage > 0 &&
+                                          playedPercentage < MediaConstants.WATCHED_PERCENTAGE_THRESHOLD;
+
+            if (!isPlayed && (hasProgress || isBelowWatchedThreshold))
             {
                 IsPlayButtonVisible = false;
                 IsResumeButtonVisible = true;
                 IsPlayFromBeginningButtonVisible = true;
 
                 // Update progress bar
-                WatchProgressPercentage = userData.PlayedPercentage ?? 0;
-                IsProgressVisible = true;
+                if (playedPercentage > 0)
+                {
+                    WatchProgressPercentage = playedPercentage;
+                    IsProgressVisible = true;
+                }
+                else
+                {
+                    IsProgressVisible = false;
+                }
             }
             else
             {
@@ -1000,13 +1013,19 @@ namespace Gelatinarm.ViewModels
 
                 if (episodeIndex >= 0)
                 {
+                    var listEpisode = Episodes[episodeIndex];
+                    if (targetEpisode.UserData != null && listEpisode.UserData == null)
+                    {
+                        listEpisode.UserData = targetEpisode.UserData;
+                    }
+
                     await RunOnUIThreadAsync(() =>
                     {
                         SelectedEpisodeIndex = episodeIndex;
                         // Force property change notification to ensure UI updates
                         OnPropertyChanged(nameof(SelectedEpisodeIndex));
                     });
-                    await SelectEpisodeAsync(Episodes[episodeIndex], true);
+                    await SelectEpisodeAsync(listEpisode, true);
 
                     Logger?.LogInformation($"SelectSpecificEpisodeAsync - Set SelectedEpisodeIndex to: {episodeIndex}");
 

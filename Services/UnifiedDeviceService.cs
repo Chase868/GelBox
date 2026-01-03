@@ -49,42 +49,6 @@ namespace Gelatinarm.Services
         public object Data { get; set; }
     }
 
-    public interface IUnifiedDeviceService : IDisposable
-    {
-        bool IsXboxEnvironment { get; }
-        bool IsXboxSeriesConsole { get; }
-        bool IsXboxSeriesDevice { get; }
-        bool IsNetworkAvailable { get; }
-        bool SupportsHDR { get; }
-        bool SupportsHDR10 { get; }
-        bool SupportsHDR10Plus { get; }
-        bool SupportsHLG { get; }
-        bool SupportsDolbyVision { get; }
-        bool SupportsHardwareDecoding { get; }
-        int MaxSupportedBitrate { get; }
-        bool IsFullScreenMode { get; }
-        bool IsControllerConnected { get; }
-        int ConnectedControllerCount { get; }
-        GamepadButtons CurrentButtonState { get; }
-        bool IsXboxNavigationEnabled { get; }
-        bool IsMonitoring { get; }
-        string GetDeviceName();
-        string GetDeviceId();
-        Task<DeviceInfo> GetDeviceInfoAsync();
-        ConnectionType GetCurrentConnectionType();
-        Task EnterFullScreenModeAsync();
-        Task ExitFullScreenModeAsync();
-        void EnableXboxNavigation();
-        void DisableMouseCursor();
-        Task StartMonitoringAsync();
-        Task StopMonitoringAsync();
-        event EventHandler<GamepadEventArgs> ControllerConnected;
-        event EventHandler<GamepadEventArgs> ControllerDisconnected;
-        event EventHandler<GamepadButtons> ButtonReleased;
-        event EventHandler<GamepadButtonStateChangedEventArgs> ButtonStateChanged;
-        event EventHandler<SystemEventArgs> SystemEvent;
-    }
-
     public class UnifiedDeviceService : BaseService, IUnifiedDeviceService
     {
         private readonly ApplicationView _appView;

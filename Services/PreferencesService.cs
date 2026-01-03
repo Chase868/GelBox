@@ -14,33 +14,6 @@ using Windows.System.Profile;
 
 namespace Gelatinarm.Services
 {
-    public interface IPreferencesService
-    {
-        // Xbox Features
-        bool IsXboxEnvironment { get; }
-
-        // Storage Operations
-        Task SaveAsync<T>(string key, T data);
-        Task<T> LoadAsync<T>(string key);
-        T GetValue<T>(string key, T defaultValue = default);
-        void SetValue<T>(string key, T value);
-        void RemoveValue(string key);
-        Task RemoveSettingAsync(string key);
-        Task ClearCacheAsync();
-
-
-        Task<Dictionary<string, object>> GetAllPreferences();
-
-        // Consolidated App Preferences
-        Task<AppPreferences> GetAppPreferencesAsync();
-        Task UpdateAppPreferencesAsync(AppPreferences preferences);
-        Task SaveAsDefaultAppPreferencesAsync(AppPreferences preferences);
-
-        // Playback Position
-        Task<long> GetPlaybackPositionAsync(string itemId);
-        Task SetPlaybackPositionAsync(string itemId, long positionTicks);
-    }
-
     public class PreferencesService : BaseService, IPreferencesService
     {
         private static readonly JsonSerializerOptions JsonOptions = new()

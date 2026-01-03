@@ -29,16 +29,6 @@ namespace Gelatinarm.Services
         OverLimit = 3
     }
 
-    /// <summary>
-    ///     Interface for memory monitoring services
-    /// </summary>
-    public interface IMemoryMonitor
-    {
-        bool IsMemoryConstrained { get; }
-        event EventHandler<MemoryUsageEventArgs> MemoryUsageChanged;
-        event EventHandler<MemoryPressureEventArgs> MemoryPressureChanged;
-    }
-
     public class MemoryUsageEventArgs : EventArgs
     {
         public bool IsMemoryConstrained { get; set; }
@@ -46,60 +36,11 @@ namespace Gelatinarm.Services
         public long TotalMemory { get; set; }
     }
 
-    /// <summary>
-    ///     Interface for network monitoring services
-    /// </summary>
-    public interface INetworkMonitor
-    {
-        long CurrentBandwidth { get; }
-        ConnectionType ConnectionType { get; }
-        event EventHandler<NetworkConditionsEventArgs> NetworkConditionsChanged;
-        event EventHandler<BandwidthEventArgs> BandwidthChanged;
-        event EventHandler<ConnectionQualityEventArgs> ConnectionQualityChanged;
-    }
-
     public class NetworkConditionsEventArgs : EventArgs
     {
         public long Bandwidth { get; set; }
         public int Latency { get; set; }
         public double PacketLoss { get; set; }
-    }
-
-    /// <summary>
-    ///     Unified system monitoring service that consolidates memory monitoring, network monitoring,
-    ///     and performance optimization into a single cohesive service for Xbox applications.
-    /// </summary>
-    public interface ISystemMonitorService : IDisposable
-    {
-        // Memory monitoring
-        ulong AvailableMemory { get; }
-        ulong TotalMemory { get; }
-        double MemoryUsage { get; }
-        AppMemoryUsageLevel MemoryPressure { get; }
-        bool IsMemoryConstrained { get; }
-
-        // Network monitoring
-        bool IsNetworkAvailable { get; }
-        double CurrentBandwidth { get; }
-        NetworkMetrics NetworkMetrics { get; }
-
-        // Performance and resource management
-        bool IsResourceConstrained { get; }
-        bool IsMonitoring { get; }
-        SystemMetrics GetCurrentMetrics();
-
-        // Control methods
-        Task StartMonitoringAsync();
-        Task StopMonitoringAsync();
-
-        // Events
-        event EventHandler<SystemMetrics> MetricsUpdated;
-        event EventHandler<MemoryUsageEventArgs> MemoryUsageChanged;
-        event EventHandler<AppMemoryUsageLevel> MemoryPressureChanged;
-        event EventHandler<NetworkMetrics> NetworkMetricsUpdated;
-        event EventHandler<bool> NetworkStatusChanged;
-        event EventHandler<double> BandwidthChanged;
-        event EventHandler<ResourceConstraintEventArgs> ResourceConstraintDetected;
     }
 
     public class SystemMetrics

@@ -25,7 +25,6 @@ namespace Gelatinarm.Services
         private readonly IMediaControlService _mediaControlService;
         private readonly IPreferencesService _preferencesService;
         private readonly IMediaPlaybackService _mediaPlaybackService;
-        private readonly IPlaybackRestartService _playbackRestartService;
         private readonly IUnifiedDeviceService _deviceService;
         private readonly PlaybackResumeCoordinator _resumeCoordinator;
         private readonly PlaybackSourceResolver _sourceResolver;
@@ -40,8 +39,6 @@ namespace Gelatinarm.Services
 
         // Resume state management
         // Enhanced HLS resume tracking
-        private DateTime _lastPositionLogTime = DateTime.MinValue;
-
         public PlaybackControlService(
             ILogger<PlaybackControlService> logger,
             JellyfinApiClient apiClient,
@@ -50,7 +47,6 @@ namespace Gelatinarm.Services
             IPreferencesService preferencesService,
             IMediaControlService mediaControlService,
             IMediaPlaybackService mediaPlaybackService,
-            IPlaybackRestartService playbackRestartService,
             IUnifiedDeviceService deviceService) : base(logger)
         {
             _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
@@ -60,20 +56,16 @@ namespace Gelatinarm.Services
             _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
             _mediaControlService = mediaControlService ?? throw new ArgumentNullException(nameof(mediaControlService));
             _mediaPlaybackService = mediaPlaybackService ?? throw new ArgumentNullException(nameof(mediaPlaybackService));
-            _playbackRestartService = playbackRestartService ?? throw new ArgumentNullException(nameof(playbackRestartService));
             _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
             _resumeCoordinator = new PlaybackResumeCoordinator(logger);
             _sourceResolver = new PlaybackSourceResolver(logger, apiClient, authService, deviceService);
         }
 
-        public event EventHandler<MediaPlaybackState> PlaybackStateChanged;
-        public event EventHandler<TimeSpan> PositionChanged;
-
         /// <summary>
         /// Gets the HLS manifest offset when server creates a new manifest at a different position
         /// This should be added to the playback position to get the actual media position
         /// </summary>
-        public TimeSpan HlsManifestOffset { get; internal set; } = TimeSpan.Zero;
+        public TimeSpan HlsManifestOffset { get; set; } = TimeSpan.Zero;
 
         public async Task InitializeAsync(MediaPlayer mediaPlayer, MediaPlaybackParams playbackParams)
         {
@@ -82,9 +74,6 @@ namespace Gelatinarm.Services
             _currentItem = playbackParams.Item;
 
             ResetResumeTracking();
-
-            // Subscribe to media player events using helper
-            SubscribeToPlaybackEvents(_mediaPlayer);
 
             await Task.CompletedTask;
         }
@@ -316,6 +305,52 @@ namespace Gelatinarm.Services
             return _resumeCoordinator.IsInProgress(_resumePolicy, _pendingResumePosition.HasValue);
         }
 
+        public bool HasPendingResumePosition()
+        {
+            return _pendingResumePosition.HasValue;
+        }
+
+        public Task<ResumeFlowOutcome> HandleResumeOnPlaybackStartAsync(
+            PlaybackSessionState sessionState,
+            MediaPlaybackParams playbackParams,
+            Func<TimeSpan> getCurrentPosition,
+            Action onHlsResumeFixCompleted,
+            Func<ResumeFailureContext, Task> onResumeFailedAsync)
+        {
+            return _resumeCoordinator.HandleResumeOnPlaybackStartAsync(new ResumeCoordinatorContext
+            {
+                SessionState = sessionState,
+                PlaybackParams = playbackParams,
+                GetCurrentPosition = getCurrentPosition,
+                ApplyResumeIfNeeded = () =>
+                {
+                    var pendingSeekPositionTicks = sessionState?.PendingSeekPositionAfterQualitySwitch ?? 0;
+                    var result = ApplyResumeIfNeeded(ref pendingSeekPositionTicks);
+                    if (sessionState != null)
+                    {
+                        sessionState.PendingSeekPositionAfterQualitySwitch = pendingSeekPositionTicks;
+                        if (result)
+                        {
+                            sessionState.LastSeekTime = DateTime.UtcNow;
+                        }
+                    }
+                    return result;
+                },
+                IsResumePending = () =>
+                {
+                    if (sessionState?.IsHlsStream == true)
+                    {
+                        return IsHlsResumeInProgress();
+                    }
+
+                    return HasPendingResumePosition();
+                },
+                GetManifestOffset = () => HlsManifestOffset,
+                OnHlsResumeFixCompleted = onHlsResumeFixCompleted,
+                OnResumeFailedAsync = onResumeFailedAsync
+            });
+        }
+
         public void CancelPendingResume(string reason)
         {
             _resumeCoordinator.CancelPendingResume(ref _pendingResumePosition, reason);
@@ -383,7 +418,7 @@ namespace Gelatinarm.Services
             Logger.LogInformation("Direct Play is available - using direct HTTP streaming");
 
             // Clear the TranscodingUrl since we're using Direct Play
-            // This ensures PlaybackStatisticsService correctly reports "Direct playing"
+            // This ensures playback stats report "Direct playing"
             _currentMediaSource.TranscodingUrl = null;
 
             var directPlayUrl = _sourceResolver.BuildStreamUrl(_currentMediaSource, _currentItem, _playbackParams, playbackInfo.PlaySessionId);
@@ -659,7 +694,6 @@ namespace Gelatinarm.Services
 
         protected override void UnsubscribeEvents()
         {
-            UnsubscribeFromPlaybackEvents(_mediaPlayer);
             base.UnsubscribeEvents();
         }
 
@@ -691,178 +725,6 @@ namespace Gelatinarm.Services
             return string.Join(" - ", parts);
         }
 
-        private void OnPlaybackStateChanged(MediaPlaybackSession sender, object args)
-        {
-            try
-            {
-                // Early exit if sender is null or disposed
-                if (sender == null)
-                {
-                    Logger.LogDebug("[PLAYBACK-STATE] Sender is null, skipping handler");
-                    return;
-                }
-
-                MediaPlaybackState state = MediaPlaybackState.None;
-                TimeSpan position = TimeSpan.Zero;
-                double bufferProgress = 1.0;
-                bool? canPause = null;
-                bool? canSeek = null;
-
-                // Wrap all COM object property access in try-catch to handle disposed objects
-                try
-                {
-                    state = sender.PlaybackState;
-                }
-                catch (Exception ex) when (ex.HResult == unchecked((int)0x80004005) || ex.HResult == unchecked((int)0x800706BA))
-                {
-                    // COM object disposed or RPC server unavailable
-                    Logger.LogDebug("[PLAYBACK-STATE] MediaPlaybackSession disposed, skipping handler");
-                    return;
-                }
-
-                try
-                {
-                    position = sender.Position;
-                }
-                catch (Exception)
-                {
-                    // Position unavailable
-                }
-
-                var isHlsStream = _currentMediaSource?.TranscodingUrl?.Contains(".m3u8") == true;
-
-                // BufferingProgress often throws InvalidCastException for HLS streams
-                try
-                {
-                    if (!isHlsStream)
-                    {
-                        bufferProgress = sender.BufferingProgress;
-                    }
-                }
-                catch (Exception)
-                {
-                    // Expected for HLS streams or disposed objects
-                }
-
-                // These properties may throw when the session is disposed
-                try
-                {
-                    canPause = sender.CanPause;
-                    canSeek = sender.CanSeek;
-                }
-                catch (Exception)
-                {
-                    // Properties unavailable - session may be disposed
-                }
-
-                Logger.LogInformation($"[PLAYBACK-STATE] State changed to: {state}, " +
-                    $"Position: {position.TotalSeconds:F2}s, " +
-                    $"BufferingProgress: {bufferProgress:P}, " +
-                    $"CanPause: {canPause?.ToString() ?? "N/A"}, " +
-                    $"CanSeek: {canSeek?.ToString() ?? "N/A"}");
-
-                // Log memory usage periodically
-                if (state == MediaPlaybackState.Playing || state == MediaPlaybackState.Buffering)
-                {
-                    var memoryUsage = Windows.System.MemoryManager.AppMemoryUsage / (1024.0 * 1024.0);
-                    var memoryLimit = Windows.System.MemoryManager.AppMemoryUsageLimit / (1024.0 * 1024.0);
-                    Logger.LogDebug($"[MEMORY] Current usage: {memoryUsage:F2} MB / {memoryLimit:F2} MB ({memoryUsage / memoryLimit:P})");
-                }
-
-                PlaybackStateChanged?.Invoke(this, state);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "[ERROR] Exception in OnPlaybackStateChanged handler");
-                // Don't rethrow - we don't want to crash the app from an event handler
-            }
-        }
-
-        private void OnPositionChanged(MediaPlaybackSession sender, object args)
-        {
-            try
-            {
-                // Early exit if sender is null or disposed
-                if (sender == null)
-                {
-                    return;
-                }
-
-                TimeSpan position = TimeSpan.Zero;
-                TimeSpan naturalDuration = TimeSpan.Zero;
-                double? playbackRate = null;
-                bool? isProtected = null;
-
-                // Wrap all COM object property access in try-catch to handle disposed objects
-                try
-                {
-                    position = sender.Position;
-                }
-                catch (Exception ex) when (ex.HResult == unchecked((int)0x80004005) || ex.HResult == unchecked((int)0x800706BA))
-                {
-                    // COM object disposed or RPC server unavailable
-                    return;
-                }
-
-                // Only log position changes every 5 seconds to reduce log spam
-                var now = DateTime.UtcNow;
-                if ((now - _lastPositionLogTime).TotalSeconds >= 5.0)
-                {
-                    // Try to get additional properties for logging, but don't fail if unavailable
-                    try
-                    {
-                        naturalDuration = sender.NaturalDuration;
-                        playbackRate = sender.PlaybackRate;
-                        isProtected = sender.IsProtected;
-                    }
-                    catch (Exception)
-                    {
-                        // Properties unavailable - session may be disposed
-                    }
-
-                    Logger.LogDebug($"[POSITION] Current: {position.TotalSeconds:F2}s / {naturalDuration.TotalSeconds:F2}s, " +
-                        $"PlaybackRate: {playbackRate?.ToString() ?? "N/A"}, " +
-                        $"IsProtected: {isProtected?.ToString() ?? "N/A"}");
-                    _lastPositionLogTime = now;
-                }
-
-                PositionChanged?.Invoke(this, position);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "[ERROR] Exception in OnPositionChanged handler");
-                // Don't rethrow - we don't want to crash the app from an event handler
-            }
-        }
-
-        #region MediaPlayer Event Helpers
-
-        /// <summary>
-        ///     Subscribe to common MediaPlayer playback events
-        /// </summary>
-        protected void SubscribeToPlaybackEvents(MediaPlayer mediaPlayer)
-        {
-            if (mediaPlayer?.PlaybackSession == null)
-                return;
-
-            mediaPlayer.PlaybackSession.PlaybackStateChanged += OnPlaybackStateChanged;
-            mediaPlayer.PlaybackSession.PositionChanged += OnPositionChanged;
-        }
-
-        /// <summary>
-        ///     Unsubscribe from MediaPlayer playback events
-        /// </summary>
-        protected void UnsubscribeFromPlaybackEvents(MediaPlayer mediaPlayer)
-        {
-            if (mediaPlayer?.PlaybackSession == null)
-                return;
-
-            mediaPlayer.PlaybackSession.PlaybackStateChanged -= OnPlaybackStateChanged;
-            mediaPlayer.PlaybackSession.PositionChanged -= OnPositionChanged;
-        }
-
-        #endregion
-
         #region Stream Switching Helper
 
         /// <summary>
@@ -876,7 +738,7 @@ namespace Gelatinarm.Services
             try
             {
                 var itemToReload = _currentItem ?? _playbackParams?.Item;
-                await _playbackRestartService.RestartPlaybackAsync(new PlaybackRestartRequest
+                await RestartPlaybackAsync(new PlaybackRestartRequest
                 {
                     RestartReason = restartReason,
                     MediaPlayer = _mediaPlayer,
@@ -899,6 +761,109 @@ namespace Gelatinarm.Services
         }
 
         #endregion
+
+        private async Task RestartPlaybackAsync(PlaybackRestartRequest request)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (request.MediaPlayer?.PlaybackSession == null)
+            {
+                Logger.LogWarning($"Cannot restart playback for {request.RestartReason} - media player not initialized");
+                return;
+            }
+
+            if (request.ItemToReload == null)
+            {
+                Logger.LogError($"Cannot restart playback for {request.RestartReason} - no current item available");
+                throw new InvalidOperationException("No current item available for playback restart");
+            }
+
+            var currentPosition = request.MediaPlayer.PlaybackSession.Position;
+            var wasPlaying = request.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
+            Logger.LogInformation(
+                $"Restarting playback for {request.RestartReason}. Current position: {currentPosition:hh\\:mm\\:ss\\.fff}, " +
+                $"AudioStreamIndex={request.AudioStreamIndex?.ToString() ?? request.PlaybackParams?.AudioStreamIndex?.ToString() ?? "null"}, " +
+                $"SubtitleStreamIndex={request.SubtitleStreamIndex?.ToString() ?? request.PlaybackParams?.SubtitleStreamIndex?.ToString() ?? "null"}");
+
+            await ReportPlaybackStopAsync(request.PlaySessionId, currentPosition.Ticks, request.RestartReason);
+
+            _mediaControlService.Stop();
+
+            if (request.PlaybackParams != null)
+            {
+                request.PlaybackParams.StartPositionTicks = currentPosition.Ticks;
+
+                if (request.AudioStreamIndex.HasValue)
+                {
+                    request.PlaybackParams.AudioStreamIndex = request.AudioStreamIndex.Value;
+                }
+
+                if (request.SubtitleStreamIndex.HasValue)
+                {
+                    request.PlaybackParams.SubtitleStreamIndex = request.SubtitleStreamIndex.Value;
+                }
+            }
+
+            var playbackInfo = await request.GetPlaybackInfoAsync(request.ItemToReload, request.MaxBitrate);
+            var mediaSource = await request.CreateMediaSourceAsync(playbackInfo);
+            await request.StartPlaybackAsync(mediaSource, currentPosition.Ticks);
+
+            await ReportPlaybackStartAsync(request.PlaySessionId, currentPosition.Ticks, request.RestartReason);
+
+            if (wasPlaying)
+            {
+                _mediaControlService.Play();
+            }
+
+            Logger.LogInformation($"Successfully restarted playback for {request.RestartReason}");
+        }
+
+        private async Task ReportPlaybackStopAsync(string playSessionId, long positionTicks, string restartReason)
+        {
+            if (string.IsNullOrEmpty(playSessionId))
+            {
+                return;
+            }
+
+            try
+            {
+                if (_mediaPlaybackService is IMediaSessionService sessionService)
+                {
+                    await sessionService.ReportPlaybackStoppedAsync(playSessionId, positionTicks);
+                    Logger.LogInformation($"Reported playback stop for {restartReason}");
+                }
+                else
+                {
+                    Logger.LogWarning("MediaPlaybackService does not implement IMediaSessionService - cannot report playback stop");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to report playback stop before restart");
+            }
+        }
+
+        private async Task ReportPlaybackStartAsync(string playSessionId, long positionTicks, string restartReason)
+        {
+            if (string.IsNullOrEmpty(playSessionId))
+            {
+                return;
+            }
+
+            if (_mediaPlaybackService is IMediaSessionService sessionService)
+            {
+                await sessionService.ReportPlaybackStartAsync(playSessionId, positionTicks);
+                Logger.LogInformation($"Reported playback start for {restartReason} with session {playSessionId}");
+            }
+            else
+            {
+                Logger.LogWarning("MediaPlaybackService does not implement IMediaSessionService - cannot report playback start");
+            }
+        }
 
         #region Adaptive Streaming Event Handlers
 
@@ -931,5 +896,20 @@ namespace Gelatinarm.Services
         }
 
         #endregion
+    }
+
+    internal sealed class PlaybackRestartRequest
+    {
+        public string RestartReason { get; set; } = "stream change";
+        public MediaPlayer MediaPlayer { get; set; }
+        public MediaPlaybackParams PlaybackParams { get; set; }
+        public BaseItemDto ItemToReload { get; set; }
+        public string PlaySessionId { get; set; }
+        public int? AudioStreamIndex { get; set; }
+        public int? SubtitleStreamIndex { get; set; }
+        public int? MaxBitrate { get; set; }
+        public Func<BaseItemDto, int?, Task<PlaybackInfoResponse>> GetPlaybackInfoAsync { get; set; }
+        public Func<PlaybackInfoResponse, Task<MediaSource>> CreateMediaSourceAsync { get; set; }
+        public Func<MediaSource, long?, Task> StartPlaybackAsync { get; set; }
     }
 }

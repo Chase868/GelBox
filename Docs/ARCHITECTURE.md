@@ -56,7 +56,7 @@ Gelatinarm follows the Model-View-ViewModel (MVVM) pattern with a service layer:
   - **Transient**: Stateless services and most ViewModels
     - All detail page ViewModels (MovieDetailsViewModel, etc.)
     - Settings ViewModels
-    - IMediaControllerService, IDialogService
+    - IControllerInputService, IDialogService
 - **Constructor Injection**: All dependencies resolved via constructors
 - **Service Resolution**: Use GetService<T>() or GetRequiredService<T>() from BasePage
 
@@ -85,12 +85,12 @@ Gelatinarm follows the Model-View-ViewModel (MVVM) pattern with a service layer:
 - **PlaybackControlService**: Playback setup, stream selection, and restart flow
   - Delegates source selection to `PlaybackSourceResolver`
   - Delegates resume logic to `PlaybackResumeCoordinator`
-  - Delegates restart logic for track/subtitle changes to `PlaybackRestartService`
+  - Owns restart logic for track/subtitle changes
   - Uses stream policy to align DirectPlay and HLS behavior with shared logic
 - **Playback Resume / Buffering Orchestration** (Helpers)
-  - `PlaybackStateOrchestrator`: reacts to PlaybackStateChanged and updates UI-facing state
-  - `BufferingStateCoordinator`: standardizes buffering start/end transitions and timeout handling
-  - `ResumeFlowCoordinator`: centralizes resume acceptance and completion reporting
+  - `PlaybackStateCoordinator`: reacts to PlaybackStateChanged, snapshots state on the UI thread, and de-duplicates noisy events
+  - `BufferingStateCoordinator`: standardizes buffering start/end transitions, seek-aware timeouts, and HLS-specific fixes
+  - `PlaybackResumeCoordinator`: centralizes resume acceptance and retry scheduling
   - `SeekCompletionCoordinator`: handles seek completion logging and validation
 - **Separation of Concerns**: orchestration (ViewModel + helpers) is kept distinct from control (services)
 
@@ -160,7 +160,7 @@ View (User Message) ← ViewModel (Process) ← Service (Return Default) ← Net
 
 ### Views
 - UI layout and styling
-- User input handling (delegated to MediaControllerService for media playback)
+- User input handling (delegated to ControllerInputService for media playback)
 - Data binding to ViewModels
 - Navigation triggers
 
@@ -313,7 +313,7 @@ The project suppresses certain compiler warnings that are either benign or unavo
 
 ### Input Handling
 - Event-based gamepad input (no polling)
-- MediaControllerService handles all media playback input
+- ControllerInputService handles all media playback input
 - XY focus navigation disabled during playback to prevent analog stick sounds
 - Control visibility state determines input behavior
 - Debounce search input (500ms delay)
@@ -335,39 +335,26 @@ The project suppresses certain compiler warnings that are either benign or unavo
   - Xbox Series S/X: HDR10, HDR10+, HLG, Dolby Vision Profile 8.1
 - **Transcode Triggers**: Unsupported codec, bandwidth limits, or incompatible profile
 
-### Playback Statistics System
+### Playback Statistics Overlay
 
-The PlaybackStatisticsService provides real-time metrics during media playback, displaying accurate information from multiple data sources:
+The playback stats overlay is computed in `ViewModels/MediaPlayerViewModel.cs` and updates on a 1s UI timer when visible:
 
-#### Progress Reporting
-- **Interval**: Reports playback progress to Jellyfin server every 5 seconds (configurable via POSITION_REPORT_INTERVAL_TICKS)
-- **Timeout Handling**: 10-second timeout for HTTP requests with proper completion tracking
-- **Overlap Prevention**: Ensures new progress reports don't start while previous ones are pending
-- **Network Resilience**: Handles slow networks gracefully by waiting for timed-out requests to complete
-
-#### Data Sources
 - **MediaSourceInfo** (from Jellyfin server):
-  - Play Method (Direct Play/Direct Stream/Transcode)
-  - Container format (MKV, MP4, etc.)
-  - Video/Audio codec information
-  - Bitrate (displayed in Mbps)
+  - Play method (Direct Play/Direct Stream/Transcode)
+  - Container format
+  - Video/audio codec info
   - Media streams metadata
 
-- **MediaPlayer.PlaybackSession** (Windows Media Player):
+- **MediaPlayer.PlaybackSession**:
   - Resolution (NaturalVideoWidth/Height)
   - Current position and duration
-  - Playback state (Playing/Paused/Buffering)
-  - Buffer and download progress percentages
-  - Playback speed (if not 1.0x)
+  - Playback state and buffer progress
+  - Playback rate
 
 - **MediaStreams** (within MediaSourceInfo):
-  - Video codec and profile
-  - HDR type (HDR10, Dolby Vision, SDR)
+  - HDR type
   - Frame rate (real or average fps)
-  - Audio codec, channels, and sample rate
-  - Color transfer characteristics
-
-#### Statistics Displayed
+  - Audio channels/sample rate
 - **Video Info**: Resolution, codec, frame rate, playback speed
 - **Audio Info**: Codec, channels (with description like "6 (5.1)"), sample rate
 - **Playback Info**: Player type, play method, protocol (HLS/DASH/HTTP), position

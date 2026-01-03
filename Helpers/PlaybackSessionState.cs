@@ -5,7 +5,6 @@ namespace Gelatinarm.Helpers
     public sealed class PlaybackSessionState
     {
         public bool IsHlsStream { get; set; }
-        public TimeSpan HlsManifestOffset { get; set; }
         public bool HlsManifestOffsetApplied { get; set; }
         public TimeSpan ExpectedHlsSeekTarget { get; set; }
         public DateTime LastSeekTime { get; set; } = DateTime.MinValue;
@@ -19,11 +18,6 @@ namespace Gelatinarm.Helpers
             if (serviceOffset > TimeSpan.Zero)
             {
                 return rawPosition + serviceOffset;
-            }
-
-            if (HlsManifestOffsetApplied && HlsManifestOffset > TimeSpan.Zero)
-            {
-                return rawPosition + HlsManifestOffset;
             }
 
             return rawPosition;
@@ -41,18 +35,6 @@ namespace Gelatinarm.Helpers
             ExpectedHlsSeekTarget = TimeSpan.Zero;
         }
 
-        public void SetManifestOffset(TimeSpan offset, bool applied)
-        {
-            HlsManifestOffset = offset;
-            HlsManifestOffsetApplied = applied;
-        }
-
-        public void ResetManifestOffset()
-        {
-            HlsManifestOffset = TimeSpan.Zero;
-            HlsManifestOffsetApplied = false;
-        }
-
         public void DecrementPendingSeek()
         {
             if (PendingSeekCount > 0)
@@ -64,13 +46,13 @@ namespace Gelatinarm.Helpers
         public void Reset()
         {
             IsHlsStream = false;
-            ResetManifestOffset();
             ClearExpectedSeekTarget();
             PendingSeekCount = 0;
             LastSeekTime = DateTime.MinValue;
             PendingSeekPositionAfterQualitySwitch = 0;
             HasPerformedInitialSeek = false;
             IsHlsTrackChange = false;
+            HlsManifestOffsetApplied = false;
         }
     }
 }

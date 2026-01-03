@@ -15,35 +15,6 @@ namespace Gelatinarm.Services
         All
     }
 
-    public interface IMediaControlService
-    {
-        MediaPlayer MediaPlayer { get; }
-        bool IsPlaying { get; }
-        BaseItemDto CurrentItem { get; }
-        RepeatMode RepeatMode { get; }
-        TimeSpan Position { get; }
-        TimeSpan Duration { get; }
-
-        event EventHandler<BaseItemDto> NowPlayingChanged;
-        event EventHandler<MediaPlaybackState> PlaybackStateChanged;
-        event EventHandler<MediaPlayerFailedEventArgs> MediaFailed;
-        event EventHandler MediaEnded;
-        event EventHandler MediaOpened;
-
-        Task InitializeAsync(MediaPlayer mediaPlayer);
-        void Play();
-        void Pause();
-        void Stop();
-        void SeekTo(TimeSpan position);
-        void SeekForward(int seconds);
-        void SeekBackward(int seconds);
-        void SetRepeatMode(RepeatMode mode);
-        RepeatMode CycleRepeatMode();
-        void SetPlaybackRate(double rate);
-        Task SetMediaSource(MediaPlaybackItem source, BaseItemDto item);
-        void ClearMediaSource();
-    }
-
     public class MediaControlService : BaseService, IMediaControlService, IDisposable
     {
         private readonly IPreferencesService _preferencesService;

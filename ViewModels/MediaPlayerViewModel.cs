@@ -10,6 +10,7 @@ using Gelatinarm.Constants;
 using Gelatinarm.Helpers;
 using Gelatinarm.Models;
 using Gelatinarm.Services;
+using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,9 +27,8 @@ namespace Gelatinarm.ViewModels
     {
         private const double SKIP_CHECK_THRESHOLD_SECONDS = 0.5;
         private volatile bool _isDisposed = false; // Track disposal state
-        private readonly IEpisodeQueueService _episodeQueueService;
         private readonly IMediaControlService _mediaControlService;
-        private readonly IMediaControllerService _mediaControllerService;
+        private readonly IControllerInputService _controllerInputService;
         private readonly IMediaNavigationService _mediaNavigationService;
         private readonly IMediaOptimizationService _mediaOptimizationService;
         private readonly IMediaPlaybackService _mediaPlaybackService;
@@ -36,10 +36,9 @@ namespace Gelatinarm.ViewModels
         private readonly INavigationService _navigationService;
 
         // Services
+        private readonly JellyfinApiClient _apiClient;
         private readonly IPlaybackControlService _playbackControlService;
-        private readonly IPlaybackStatisticsService _playbackStatisticsService;
         private readonly IPreferencesService _preferencesService;
-        private readonly ISkipSegmentService _skipSegmentService;
         private readonly ISubtitleService _subtitleService;
 
         [ObservableProperty] private bool _areControlsVisible = true;
@@ -64,9 +63,10 @@ namespace Gelatinarm.ViewModels
         private bool _hasAutoPlayedNext = false;
 
         // Track/quality change tracking
-        private bool _hasReportedPlaybackStart = false;
         private int _progressReportCounter = 0;
         private TimeSpan _actualResumePosition = TimeSpan.Zero; // Track actual resume position for corruption detection
+        private MediaPlaybackState _lastPlaybackState = MediaPlaybackState.None;
+        private bool _hasPlaybackStateSnapshot;
 
         // Track when video playback has started
         private bool _hasVideoStarted = false;
@@ -80,7 +80,14 @@ namespace Gelatinarm.ViewModels
 
         [ObservableProperty] private bool _isAudioVisualizationActive;
 
-        [ObservableProperty] private bool _isBuffering;
+        public bool IsBuffering
+        {
+            get
+            {
+                var state = GetPlaybackStateSnapshot();
+                return state.HasValue && state.Value == MediaPlaybackState.Buffering;
+            }
+        }
 
         [ObservableProperty] private bool _isEndsAtTimeVisible;
 
@@ -90,10 +97,28 @@ namespace Gelatinarm.ViewModels
 
         private bool _isOutroSkipAvailable = false;
 
-        [ObservableProperty] private bool _isPaused;
-        [ObservableProperty] private bool _isPlaying;
+        public bool IsPaused
+        {
+            get
+            {
+                var state = GetPlaybackStateSnapshot();
+                return state.HasValue && state.Value == MediaPlaybackState.Paused;
+            }
+        }
 
-        [ObservableProperty] private bool _isStatsOverlayVisible;
+        public bool IsPlaying
+        {
+            get
+            {
+                var state = GetPlaybackStateSnapshot();
+                if (state.HasValue)
+                {
+                    return state.Value == MediaPlaybackState.Playing;
+                }
+
+                return _mediaControlService?.IsPlaying == true;
+            }
+        }
 
         [ObservableProperty] private bool _isStatsVisible;
 
@@ -117,11 +142,7 @@ namespace Gelatinarm.ViewModels
         {
             get
             {
-                // For HLS streams, we may need to add manifest offset from two sources:
-                // 1. PlaybackControlService.HlsManifestOffset - for initial resume operations
-                // 2. Local session offset - for large seeks during playback that create new manifests
-
-                // Use PlaybackControlService offset for resume scenarios
+                // For HLS streams, we may need to add manifest offset from PlaybackControlService.
                 return _sessionState.GetDisplayPosition(_position, _playbackControlService?.HlsManifestOffset ?? TimeSpan.Zero);
             }
             set => SetProperty(ref _position, value);
@@ -140,18 +161,22 @@ namespace Gelatinarm.ViewModels
 
         [ObservableProperty] private SubtitleTrack _selectedSubtitle;
 
-        [ObservableProperty] private string _statsText;
-
         private DispatcherTimer _statsUpdateTimer;
         private DispatcherTimer _bufferingTimeoutTimer;
         private DateTime? _bufferingStartTime;
         private const int BUFFERING_TIMEOUT_SECONDS = 30; // Default buffering timeout
-        private readonly ResumeRetryCoordinator _resumeRetryCoordinator;
         private readonly BufferingStateCoordinator _bufferingStateCoordinator;
-        private readonly PlaybackStateOrchestrator _playbackStateOrchestrator;
-        private readonly ResumeFlowCoordinator _resumeFlowCoordinator;
+        private readonly PlaybackStateCoordinator _playbackStateCoordinator;
         private readonly SeekCompletionCoordinator _seekCompletionCoordinator;
         private bool _resumeAttemptInProgress;
+        private MediaSourceInfo _statsMediaSource;
+        private AppPreferences _preferences;
+        private TimeSpan? _introStartTime;
+        private TimeSpan? _introEndTime;
+        private TimeSpan? _outroStartTime;
+        private TimeSpan? _outroEndTime;
+        private bool _hasAutoSkippedIntro;
+        private bool _hasAutoSkippedOutro;
 
         [ObservableProperty] private ObservableCollection<SubtitleTrack> _subtitleTracks = new();
 
@@ -163,17 +188,13 @@ namespace Gelatinarm.ViewModels
             _preferencesService = GetRequiredService<IPreferencesService>();
             _mediaPlaybackService = GetRequiredService<IMediaPlaybackService>();
             _navigationService = GetRequiredService<INavigationService>();
-            _episodeQueueService = GetRequiredService<IEpisodeQueueService>();
             _mediaNavigationService = GetRequiredService<IMediaNavigationService>();
-            _playbackStatisticsService = GetRequiredService<IPlaybackStatisticsService>();
-            _mediaControllerService = GetRequiredService<IMediaControllerService>();
-            _skipSegmentService = GetRequiredService<ISkipSegmentService>();
+            _controllerInputService = GetRequiredService<IControllerInputService>();
             _mediaControlService = GetRequiredService<IMediaControlService>();
+            _apiClient = GetRequiredService<JellyfinApiClient>();
 
-            _resumeRetryCoordinator = new ResumeRetryCoordinator(logger);
             _bufferingStateCoordinator = new BufferingStateCoordinator(logger, BUFFERING_TIMEOUT_SECONDS);
-            _playbackStateOrchestrator = new PlaybackStateOrchestrator(logger, _bufferingStateCoordinator);
-            _resumeFlowCoordinator = new ResumeFlowCoordinator(logger, _playbackControlService, _resumeRetryCoordinator);
+            _playbackStateCoordinator = new PlaybackStateCoordinator(logger, _bufferingStateCoordinator);
             _seekCompletionCoordinator = new SeekCompletionCoordinator(logger);
             InitializeTimers();
         }
@@ -303,16 +324,10 @@ namespace Gelatinarm.ViewModels
                 if (IsPlaying)
                 {
                     _mediaControlService.Pause();
-                    // Update state immediately for responsive UI
-                    IsPlaying = false;
-                    IsPaused = true;
                 }
                 else
                 {
                     _mediaControlService.Play();
-                    // Update state immediately for responsive UI
-                    IsPlaying = true;
-                    IsPaused = false;
                 }
             }
             catch (Exception ex)
@@ -357,6 +372,7 @@ namespace Gelatinarm.ViewModels
                 }
 
                 CancelResumeForUserSeek("User initiated backward seek");
+                NoteSeekStarted("backward");
 
                 LastActionWasSkip = true;
 
@@ -402,6 +418,7 @@ namespace Gelatinarm.ViewModels
                 }
 
                 CancelResumeForUserSeek("User initiated forward seek");
+                NoteSeekStarted("forward");
 
                 LastActionWasSkip = true;
 
@@ -453,8 +470,14 @@ namespace Gelatinarm.ViewModels
             Logger?.LogInformation($"[RESUME-CANCEL] {reason} - clearing resume target");
             _playbackParams.StartPositionTicks = null;
             _sessionState.PendingSeekPositionAfterQualitySwitch = 0;
-            _sessionState.HasPerformedInitialSeek = true;
             _playbackControlService?.CancelPendingResume(reason);
+        }
+
+        private void NoteSeekStarted(string reason)
+        {
+            _sessionState.LastSeekTime = DateTime.UtcNow;
+            ResetBufferingTimeout();
+            Logger.LogDebug($"[BUFFERING] Reset timeout for seek ({reason})");
         }
 
         private bool EnsurePlaybackStarted(string action)
@@ -626,7 +649,13 @@ namespace Gelatinarm.ViewModels
                 }
 
                 LastActionWasSkip = true;
-                await _skipSegmentService.SkipIntroAsync();
+                if (_introEndTime.HasValue && MediaPlayerElement?.MediaPlayer?.PlaybackSession != null)
+                {
+                    var currentPosition = MediaPlayerElement.MediaPlayer.PlaybackSession.Position;
+                    Logger.LogInformation($"Manual skip intro from {currentPosition} to {_introEndTime.Value}");
+                    MediaPlayerElement.MediaPlayer.PlaybackSession.Position = _introEndTime.Value;
+                    _hasAutoSkippedIntro = true;
+                }
 
                 // Hide the skip intro button after skipping
                 IsIntroSkipAvailable = false;
@@ -659,7 +688,24 @@ namespace Gelatinarm.ViewModels
                 }
 
                 LastActionWasSkip = true;
-                await _skipSegmentService.SkipOutroAsync();
+                if (MediaPlayerElement?.MediaPlayer?.PlaybackSession == null)
+                {
+                    return;
+                }
+
+                if (CurrentItem?.Type == BaseItemDto_Type.Episode)
+                {
+                    Logger.LogInformation("Skipping outro by triggering next episode");
+                    await PlayNext();
+                    return;
+                }
+
+                if (_outroEndTime.HasValue)
+                {
+                    Logger.LogInformation($"Manual skip outro to {_outroEndTime.Value}");
+                    MediaPlayerElement.MediaPlayer.PlaybackSession.Position = _outroEndTime.Value;
+                    _hasAutoSkippedOutro = true;
+                }
 
                 // Hide the skip outro button after skipping
                 IsOutroSkipAvailable = false;
@@ -792,8 +838,16 @@ namespace Gelatinarm.ViewModels
         [RelayCommand]
         private void ToggleStats()
         {
-            _playbackStatisticsService.ToggleVisibility();
-            IsStatsVisible = _playbackStatisticsService.IsVisible;
+            IsStatsVisible = !IsStatsVisible;
+            if (IsStatsVisible)
+            {
+                _statsUpdateTimer?.Start();
+                UpdatePlaybackStats();
+            }
+            else
+            {
+                _statsUpdateTimer?.Stop();
+            }
         }
 
         private void PrepareResumeForTrackChange()
@@ -892,9 +946,11 @@ namespace Gelatinarm.ViewModels
 
                     // Reset HLS state for new playback
                     ResetHlsState();
+                    ResetPlaybackStateSnapshot();
 
                     // Load user preferences
                     var appPrefs = await _preferencesService.GetAppPreferencesAsync();
+                    _preferences = appPrefs;
                     _autoPlayNextEpisode = appPrefs.AutoPlayNextEpisode;
 
                     // Initialize services with playback params
@@ -904,18 +960,14 @@ namespace Gelatinarm.ViewModels
                     {
                         await sessionService.InitializeAsync(playbackParams);
                     }
-                    await _playbackStatisticsService.InitializeAsync(MediaPlayerElement.MediaPlayer);
-                    await _mediaControllerService.InitializeAsync(MediaPlayerElement.MediaPlayer);
+                    await _controllerInputService.InitializeAsync(MediaPlayerElement.MediaPlayer);
                     await _mediaControlService.InitializeAsync(MediaPlayerElement.MediaPlayer);
 
                     // Subscribe to service events
                     _subtitleService.SubtitleChanged += OnSubtitleChanged;
                     _mediaNavigationService.NavigationStateChanged += OnNavigationStateChanged;
-                    _playbackStatisticsService.StatsUpdated += OnStatsUpdated;
-                    _mediaControllerService.ActionTriggered += OnControllerActionTriggered;
-                    _mediaControllerService.ActionWithParameterTriggered += OnControllerActionWithParameterTriggered;
-                    _skipSegmentService.SegmentAvailabilityChanged += OnSegmentAvailabilityChanged;
-                    _skipSegmentService.SegmentSkipped += OnSegmentSkipped;
+                    _controllerInputService.ActionTriggered += OnControllerActionTriggered;
+                    _controllerInputService.ActionWithParameterTriggered += OnControllerActionWithParameterTriggered;
 
                     // Subscribe to MediaPlayer events
                     if (MediaPlayerElement?.MediaPlayer != null)
@@ -954,9 +1006,7 @@ namespace Gelatinarm.ViewModels
                     if (CurrentItem != null)
                     {
                         await _mediaNavigationService.InitializeAsync(playbackParams, CurrentItem);
-
-                        // Initialize skip segment service now that we have CurrentItem
-                        await _skipSegmentService.InitializeAsync(MediaPlayerElement.MediaPlayer, CurrentItem);
+                        await InitializeSkipSegmentsAsync(MediaPlayerElement.MediaPlayer, CurrentItem);
                     }
                     else
                     {
@@ -1162,10 +1212,10 @@ namespace Gelatinarm.ViewModels
                 }
 
                 // Pass the selected media source info to the statistics service
-                var currentMediaSource = _playbackControlService.GetCurrentMediaSource();
-                if (currentMediaSource != null)
+                _statsMediaSource = _playbackControlService.GetCurrentMediaSource();
+                if (IsStatsVisible)
                 {
-                    _playbackStatisticsService.SetMediaSourceInfo(currentMediaSource);
+                    UpdatePlaybackStats();
                 }
 
                 await _playbackControlService.StartPlaybackAsync(mediaSource, _playbackParams.StartPositionTicks);
@@ -1186,11 +1236,10 @@ namespace Gelatinarm.ViewModels
 
                 var reportPosition = isHlsStream ? 0 : (_playbackParams.StartPositionTicks ?? 0);
 
-                if (_mediaPlaybackService is IMediaSessionService sessionService)
-                {
-                    await sessionService.ReportPlaybackStartAsync(_playSessionId, reportPosition);
-                    _hasReportedPlaybackStart = true;
-                }
+                    if (_mediaPlaybackService is IMediaSessionService sessionService)
+                    {
+                        await sessionService.ReportPlaybackStartAsync(_playSessionId, reportPosition);
+                    }
 
                 // Preload next episode if applicable
                 if (CurrentItem.Type == BaseItemDto_Type.Episode)
@@ -1303,10 +1352,16 @@ namespace Gelatinarm.ViewModels
                 IsError = true;
 
                 // Offer recovery options
-                if (_navigationService.CanGoBack)
+                if (_mediaNavigationService != null)
                 {
                     Logger.LogInformation("Navigating back after playback failure");
-                    await Task.Delay(2000); // Give user time to see error
+                    await Task.Delay(2000);
+                    await _mediaNavigationService.NavigateBackToOriginAsync();
+                }
+                else if (_navigationService.CanGoBack)
+                {
+                    Logger.LogInformation("Navigating back after playback failure");
+                    await Task.Delay(2000);
                     _navigationService.GoBack();
                 }
             }
@@ -1377,21 +1432,15 @@ namespace Gelatinarm.ViewModels
                     OnPropertyChanged(nameof(Position)); // Notify UI of position change
                     Duration = duration;
 
+                    if (_statsUpdateTimer?.IsEnabled == true)
+                    {
+                        UpdatePlaybackStats();
+                    }
+
                     // Always update progress bar and time displays (use Position property for actual position)
                     UpdateCustomProgressBar(Position, duration);
 
-                    // Update playback state with error handling
-                    try
-                    {
-                        var state = session.PlaybackState;
-                        IsPlaying = state == MediaPlaybackState.Playing;
-                        IsPaused = state == MediaPlaybackState.Paused;
-                        IsBuffering = state == MediaPlaybackState.Buffering;
-                    }
-                    catch (Exception stateEx)
-                    {
-                        Logger.LogError($"[POSITION-TIMER] Failed to get PlaybackState - HResult: 0x{stateEx.HResult:X8}");
-                    }
+                    // Playback state now managed via PlaybackStateChanged event
 
                     // Resume position is applied when we transition to Playing state
                     // This ensures we only resume after playback has actually started
@@ -1399,15 +1448,7 @@ namespace Gelatinarm.ViewModels
                     // Update buffering state from PlaybackState
                     // This replaces the BufferingManagementService
 
-                    // Check for intro/outro skip availability with error handling
-                    try
-                    {
-                        await _skipSegmentService.HandleAutoSkipAsync(Position);
-                    }
-                    catch (Exception skipEx)
-                    {
-                        Logger.LogDebug($"[POSITION-TIMER] Skip segment check failed: {skipEx.Message}");
-                    }
+                    await HandleAutoSkipAsync(Position);
 
                     // Check skip button visibility for all playing content
                     // Check if position has changed significantly to reduce frequency of skip button checks
@@ -1434,6 +1475,112 @@ namespace Gelatinarm.ViewModels
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error in position timer tick");
+            }
+        }
+
+        private async Task InitializeSkipSegmentsAsync(MediaPlayer mediaPlayer, BaseItemDto item)
+        {
+            if (mediaPlayer == null || item == null)
+            {
+                return;
+            }
+
+            _hasAutoSkippedIntro = false;
+            _hasAutoSkippedOutro = false;
+            _introStartTime = null;
+            _introEndTime = null;
+            _outroStartTime = null;
+            _outroEndTime = null;
+
+            if (!item.Id.HasValue)
+            {
+                return;
+            }
+
+            try
+            {
+                Logger.LogInformation($"Fetching media segments for item: {item.Id.Value}");
+                var segmentsResponse = await _apiClient.MediaSegments[item.Id.Value].GetAsync(config =>
+                {
+                    config.QueryParameters.IncludeSegmentTypes = new[]
+                    {
+                        MediaSegmentType.Intro,
+                        MediaSegmentType.Outro
+                    };
+                }).ConfigureAwait(false);
+
+                if (segmentsResponse?.Items == null || !segmentsResponse.Items.Any())
+                {
+                    Logger.LogInformation("No media segments found for this item");
+                    return;
+                }
+
+                foreach (var segment in segmentsResponse.Items)
+                {
+                    if (segment.Type == MediaSegmentDto_Type.Intro &&
+                        segment.StartTicks.HasValue && segment.EndTicks.HasValue)
+                    {
+                        _introStartTime = TimeSpan.FromTicks(segment.StartTicks.Value);
+                        _introEndTime = TimeSpan.FromTicks(segment.EndTicks.Value);
+                        Logger.LogInformation($"Found intro segment: {_introStartTime} - {_introEndTime}");
+                    }
+                    else if (segment.Type == MediaSegmentDto_Type.Outro &&
+                             segment.StartTicks.HasValue && segment.EndTicks.HasValue)
+                    {
+                        _outroStartTime = TimeSpan.FromTicks(segment.StartTicks.Value);
+                        _outroEndTime = TimeSpan.FromTicks(segment.EndTicks.Value);
+                        Logger.LogInformation($"Found outro segment: {_outroStartTime} - {_outroEndTime}");
+                    }
+                }
+
+                await UpdateSkipButtonVisibilityAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error loading media segments");
+            }
+        }
+
+        private async Task HandleAutoSkipAsync(TimeSpan currentPosition)
+        {
+            try
+            {
+                if (_preferences?.AutoSkipIntroEnabled == true &&
+                    _introStartTime.HasValue &&
+                    _introEndTime.HasValue &&
+                    !_hasAutoSkippedIntro &&
+                    currentPosition >= _introStartTime.Value &&
+                    currentPosition < _introEndTime.Value)
+                {
+                    Logger.LogInformation($"Auto-skipping intro from {currentPosition} to {_introEndTime.Value}");
+                    var playbackSession = MediaPlayerElement?.MediaPlayer?.PlaybackSession;
+                    if (playbackSession != null)
+                    {
+                        playbackSession.Position = _introEndTime.Value;
+                    }
+                    _hasAutoSkippedIntro = true;
+                    return;
+                }
+
+                if (_preferences?.AutoSkipOutroEnabled == true &&
+                    _outroStartTime.HasValue &&
+                    _outroEndTime.HasValue &&
+                    !_hasAutoSkippedOutro &&
+                    currentPosition >= _outroStartTime.Value &&
+                    currentPosition < _outroEndTime.Value)
+                {
+                    Logger.LogInformation($"Auto-skipping outro from {currentPosition} to {_outroEndTime.Value}");
+                    var playbackSession = MediaPlayerElement?.MediaPlayer?.PlaybackSession;
+                    if (playbackSession != null)
+                    {
+                        playbackSession.Position = _outroEndTime.Value;
+                    }
+                    _hasAutoSkippedOutro = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug($"[POSITION-TIMER] Skip segment check failed: {ex.Message}");
             }
         }
 
@@ -1501,31 +1648,41 @@ namespace Gelatinarm.ViewModels
                 return false;
             }
 
-            Logger.LogWarning("[BUFFERING-TIMEOUT] HLS stream stuck - attempting recovery by toggling playback");
+            Logger.LogWarning("[BUFFERING-TIMEOUT] HLS stream stuck - restarting playback at current position");
 
-            if (_mediaControlService == null)
+            if (_playbackControlService == null)
             {
                 return false;
             }
 
-            _mediaControlService.Pause();
+            PrepareForPlaybackRestart();
+            ResetBufferingTimeout();
             FireAndForget(async () =>
             {
-                await Task.Delay(500);
-                await RunOnUIThreadAsync(() =>
-                {
-                    if (_mediaControlService != null)
-                    {
-                        Logger.LogInformation("[BUFFERING-RECOVERY] Attempting to resume playback");
-                        _mediaControlService.Play();
-                    }
-                });
+                await _playbackControlService.RestartPlaybackWithCurrentPositionAsync(
+                    restartReason: "buffering timeout recovery");
             });
-
-            // Give recovery attempt 10 more seconds
-            _bufferingStartTime = DateTime.UtcNow.AddSeconds(-20); // Reset to 20s ago so we get 10 more seconds
-            Logger.LogInformation("[BUFFERING-RECOVERY] Recovery attempted, extending timeout by 10 seconds");
             return true;
+        }
+
+        private void PrepareForPlaybackRestart()
+        {
+            // Allow resume flow to run again after restart.
+            _hasVideoStarted = false;
+            _resumeAttemptInProgress = false;
+            _actualResumePosition = TimeSpan.Zero;
+            ResetPlaybackStateSnapshot();
+            _sessionState.HasPerformedInitialSeek = false;
+            _sessionState.PendingSeekCount = 0;
+            _sessionState.PendingSeekPositionAfterQualitySwitch = 0;
+            _sessionState.ExpectedHlsSeekTarget = TimeSpan.Zero;
+            _sessionState.HlsManifestOffsetApplied = false;
+            _sessionState.LastSeekTime = DateTime.MinValue;
+            _sessionState.IsHlsTrackChange = false;
+            if (_playbackControlService != null)
+            {
+                _playbackControlService.HlsManifestOffset = TimeSpan.Zero;
+            }
         }
 
         private void HandleBufferingTimeoutFailure()
@@ -1545,7 +1702,13 @@ namespace Gelatinarm.ViewModels
                     IsError = false;
                     ErrorMessage = string.Empty;
 
-                    if (_navigationService?.CanGoBack == true)
+                    if (_mediaNavigationService != null)
+                    {
+                        FireAndForget(() => _mediaNavigationService.NavigateBackToOriginAsync(),
+                            "NavigateBackToOrigin");
+                        Logger.LogInformation("[BUFFERING-TIMEOUT] Navigated back after buffering timeout");
+                    }
+                    else if (_navigationService?.CanGoBack == true)
                     {
                         _navigationService.GoBack();
                         Logger.LogInformation("[BUFFERING-TIMEOUT] Navigated back after buffering timeout");
@@ -1571,51 +1734,9 @@ namespace Gelatinarm.ViewModels
 
             try
             {
-                if (IsStatsOverlayVisible)
+                if (IsStatsVisible)
                 {
-                    // Generate stats text directly
-                    if (MediaPlayerElement?.MediaPlayer?.PlaybackSession != null)
-                    {
-                        var session = MediaPlayerElement.MediaPlayer.PlaybackSession;
-                        var stats = new System.Text.StringBuilder();
-
-                        // Safely get playback state
-                        try
-                        {
-                            stats.AppendLine($"State: {session.PlaybackState}");
-                        }
-                        catch (Exception stateEx)
-                        {
-                            stats.AppendLine($"State: Error (0x{stateEx.HResult:X8})");
-                        }
-
-                        // Safely get position
-                        try
-                        {
-                            var statsPosition = GetCurrentPlaybackPosition();
-                            stats.AppendLine($"Position: {statsPosition:mm\\:ss} / {session.NaturalDuration:mm\\:ss}");
-                        }
-                        catch (Exception posEx)
-                        {
-                            stats.AppendLine($"Position: Error (0x{posEx.HResult:X8})");
-                        }
-
-                        // Buffer information (may not be available for all stream types)
-                        try
-                        {
-                            stats.AppendLine($"Buffer: {session.BufferingProgress:P0}");
-                        }
-                        catch
-                        {
-                            stats.AppendLine("Buffer: N/A");
-                        }
-
-                        StatsText = stats.ToString();
-                    }
-                    else
-                    {
-                        StatsText = "No playback data available";
-                    }
+                    UpdatePlaybackStats();
                 }
             }
             catch (Exception ex)
@@ -1625,15 +1746,264 @@ namespace Gelatinarm.ViewModels
                 {
                     Logger.LogError($"[STATS-TIMER] HResult: 0x{ex.HResult:X8}");
                 }
-                StatsText = "Stats update error";
             }
+        }
+
+        private void UpdatePlaybackStats()
+        {
+            if (MediaPlayerElement?.MediaPlayer?.PlaybackSession == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var session = MediaPlayerElement.MediaPlayer.PlaybackSession;
+                var stats = new PlaybackStats
+                {
+                    LastUpdated = DateTime.Now,
+                    Player = "MediaPlayerElement",
+                    PlayMethod = GetPlayMethod(),
+                    Protocol = GetProtocol(),
+                    StreamType = session.NaturalVideoHeight > 0 ? "Video" : "Audio",
+                    Container = GetContainerFormat(),
+                    VideoCodec = GetVideoCodecInfo(),
+                    VideoRangeType = GetVideoRangeType(),
+                    AudioCodec = GetAudioCodecInfo(),
+                    AudioChannels = GetAudioChannels(),
+                    AudioSampleRate = GetAudioSampleRate()
+                };
+
+                if (session.NaturalVideoHeight > 0 && session.NaturalVideoWidth > 0)
+                {
+                    stats.Resolution = $"{session.NaturalVideoWidth}x{session.NaturalVideoHeight}";
+                    stats.VideoInfo = $"Resolution: {stats.Resolution}";
+
+                    var videoCodec = GetVideoCodecInfo();
+                    if (!string.IsNullOrEmpty(videoCodec))
+                    {
+                        stats.VideoInfo += $"\nCodec: {videoCodec}";
+                    }
+
+                    var frameRate = GetFrameRate();
+                    if (!string.IsNullOrEmpty(frameRate))
+                    {
+                        stats.VideoInfo += $"\nFrame Rate: {frameRate}";
+                    }
+
+                    if (session.PlaybackRate != 1.0)
+                    {
+                        stats.VideoInfo += $"\nPlayback Speed: {session.PlaybackRate:F1}x";
+                    }
+                }
+                else
+                {
+                    stats.VideoInfo = "Type: Audio Only";
+                    stats.Resolution = "--";
+                }
+
+                var playMethod = GetPlayMethod();
+                var protocol = GetProtocol();
+
+                stats.PlaybackInfo = $"Play Method: {playMethod}\nProtocol: {protocol}";
+                stats.BufferInfo = GetBufferInfo(session);
+
+                CurrentStats = stats;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "[STATS] Error updating playback stats");
+            }
+        }
+
+        private string GetBufferInfo(MediaPlaybackSession session)
+        {
+            try
+            {
+                return $"Buffer: {session.BufferingProgress:P0}";
+            }
+            catch
+            {
+                return "Buffer: N/A";
+            }
+        }
+
+        private string GetVideoCodecInfo()
+        {
+            var videoStream = _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Video);
+            return videoStream?.Codec?.ToUpper();
+        }
+
+        private string GetContainerFormat()
+        {
+            return _statsMediaSource?.Container?.ToUpper();
+        }
+
+        private string GetVideoRangeType()
+        {
+            var videoStream = _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Video);
+            if (videoStream?.VideoRangeType != null)
+            {
+                return videoStream.VideoRangeType.ToString();
+            }
+
+            if (videoStream?.ColorTransfer != null)
+            {
+                var transfer = videoStream.ColorTransfer.ToLower();
+                if (transfer.Contains("smpte2084") || transfer.Contains("st2084"))
+                {
+                    return "HDR10";
+                }
+                if (transfer.Contains("arib-std-b67") || transfer.Contains("hlg"))
+                {
+                    return "HLG";
+                }
+            }
+
+            if (!string.IsNullOrEmpty(videoStream?.CodecTag) && videoStream.CodecTag.Contains("dovi"))
+            {
+                return "Dolby Vision";
+            }
+
+            return "SDR";
+        }
+
+        private string GetAudioCodecInfo()
+        {
+            var audioStream = _statsMediaSource?.MediaStreams?
+                .FirstOrDefault(s => s.Type == MediaStream_Type.Audio &&
+                                     (s.IsDefault == true || s.Index == _statsMediaSource?.DefaultAudioStreamIndex))
+                ?? _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Audio);
+
+            return audioStream?.Codec?.ToUpper();
+        }
+
+        private string GetAudioChannels()
+        {
+            var audioStream = _statsMediaSource?.MediaStreams?
+                .FirstOrDefault(s => s.Type == MediaStream_Type.Audio &&
+                                     (s.IsDefault == true || s.Index == _statsMediaSource?.DefaultAudioStreamIndex))
+                ?? _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Audio);
+
+            if (audioStream?.Channels != null)
+            {
+                return audioStream.Channels switch
+                {
+                    1 => "1 (Mono)",
+                    2 => "2 (Stereo)",
+                    6 => "6 (5.1)",
+                    8 => "8 (7.1)",
+                    _ => audioStream.Channels.ToString()
+                };
+            }
+
+            if (!string.IsNullOrEmpty(audioStream?.ChannelLayout))
+            {
+                return audioStream.ChannelLayout;
+            }
+
+            return null;
+        }
+
+        private string GetAudioSampleRate()
+        {
+            var audioStream = _statsMediaSource?.MediaStreams?
+                .FirstOrDefault(s => s.Type == MediaStream_Type.Audio &&
+                                     (s.IsDefault == true || s.Index == _statsMediaSource?.DefaultAudioStreamIndex))
+                ?? _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Audio);
+
+            return audioStream?.SampleRate != null ? $"{audioStream.SampleRate} Hz" : null;
+        }
+
+        private string GetPlayMethod()
+        {
+            if (_statsMediaSource == null)
+            {
+                return "Unknown";
+            }
+
+            if (_statsMediaSource.SupportsDirectPlay == true)
+            {
+                return "Direct playing";
+            }
+
+            if (_statsMediaSource.SupportsDirectStream == true)
+            {
+                return "Direct streaming";
+            }
+
+            if (_statsMediaSource.SupportsTranscoding == true)
+            {
+                if (!string.IsNullOrEmpty(_statsMediaSource.TranscodingUrl))
+                {
+                    var url = _statsMediaSource.TranscodingUrl.ToLower();
+                    var hasVideoTranscode = url.Contains("videocodec=") && !url.Contains("videocodec=copy");
+                    var hasAudioTranscode = url.Contains("audiocodec=") && !url.Contains("audiocodec=copy");
+                    var audioStreamCopyDisabled = url.Contains("allowaudiostreamcopy=false");
+                    var isOnlyContainerReason = url.Contains("transcodereasons=containernotsupported") ||
+                                                url.Contains("transcodereasons=directplayerror");
+
+                    if (audioStreamCopyDisabled && !hasVideoTranscode)
+                    {
+                        return "Direct streaming";
+                    }
+
+                    if ((!hasVideoTranscode && !hasAudioTranscode && !audioStreamCopyDisabled) || isOnlyContainerReason)
+                    {
+                        return "Remuxing";
+                    }
+                }
+
+                return "Transcoding";
+            }
+
+            return "Unknown";
+        }
+
+        private string GetProtocol()
+        {
+            if (!string.IsNullOrEmpty(_statsMediaSource?.TranscodingUrl))
+            {
+                if (_statsMediaSource.TranscodingUrl.Contains(".m3u8"))
+                {
+                    return "HLS";
+                }
+                if (_statsMediaSource.TranscodingUrl.Contains(".mpd"))
+                {
+                    return "DASH";
+                }
+                return "HTTP";
+            }
+
+            if (_statsMediaSource?.SupportsDirectPlay == true)
+            {
+                return "HTTPS";
+            }
+
+            return null;
+        }
+
+        private string GetFrameRate()
+        {
+            var videoStream = _statsMediaSource?.MediaStreams?.FirstOrDefault(s => s.Type == MediaStream_Type.Video);
+            if (videoStream?.RealFrameRate != null)
+            {
+                return $"{videoStream.RealFrameRate:F2} fps";
+            }
+
+            if (videoStream?.AverageFrameRate != null)
+            {
+                return $"{videoStream.AverageFrameRate:F2} fps";
+            }
+
+            return null;
         }
 
         // Service event handlers
 
         private async void OnPlaybackStateChanged(MediaPlaybackSession sender, object args)
         {
-            await _playbackStateOrchestrator.HandlePlaybackStateChangedAsync(new PlaybackStateChangeContext
+            await _playbackStateCoordinator.HandlePlaybackStateChangedAsync(new PlaybackStateChangeContext
             {
                 IsDisposed = _isDisposed,
                 Session = sender,
@@ -1644,13 +2014,22 @@ namespace Gelatinarm.ViewModels
                 GetMetadataDuration = GetMetadataDuration,
                 HandleHlsBufferingFix = HandleHlsBufferingFix,
                 RunOnUiThreadAsync = RunOnUIThreadAsync,
-                GetIsBuffering = () => IsBuffering,
-                SetIsBuffering = value => IsBuffering = value,
+                NotifyIsBufferingChanged = () => OnPropertyChanged(nameof(IsBuffering)),
+                NotifyIsPlayingChanged = () => OnPropertyChanged(nameof(IsPlaying)),
+                NotifyIsPausedChanged = () => OnPropertyChanged(nameof(IsPaused)),
                 GetBufferingStartTime = () => _bufferingStartTime,
                 SetBufferingStartTime = value => _bufferingStartTime = value,
+                GetHasManifestOffset = () => _playbackControlService?.HlsManifestOffset > TimeSpan.Zero,
+                SetPlaybackState = state =>
+                {
+                    _lastPlaybackState = state;
+                    _hasPlaybackStateSnapshot = true;
+                },
                 GetHasVideoStarted = () => _hasVideoStarted,
                 SetHasVideoStarted = value => _hasVideoStarted = value,
-                HandleResumeOnPlaybackStartAsync = HandleResumeOnPlaybackStartAsync
+                HandleResumeOnPlaybackStartAsync = HandleResumeOnPlaybackStartAsync,
+                ApplyManifestOffsetFromBuffering = offset =>
+                    SetHlsManifestOffset(offset, false, "Detected during buffering.")
             });
         }
 
@@ -1669,11 +2048,6 @@ namespace Gelatinarm.ViewModels
         {
         }
 
-        private void OnStatsUpdated(object sender, PlaybackStats stats)
-        {
-            CurrentStats = stats;
-        }
-
         private async Task HandleResumeOnPlaybackStartAsync()
         {
             if (_resumeAttemptInProgress)
@@ -1685,14 +2059,12 @@ namespace Gelatinarm.ViewModels
             _resumeAttemptInProgress = true;
             try
             {
-                var outcome = await _resumeFlowCoordinator.HandleResumeOnPlaybackStartAsync(new ResumeFlowContext
-                {
-                    SessionState = _sessionState,
-                    PlaybackParams = _playbackParams,
-                    GetCurrentPosition = () => GetCurrentPlaybackPosition(),
-                    OnHlsResumeFixCompleted = CompleteHlsResumeFix,
-                    OnResumeFailedAsync = HandleResumeFailureAsync
-                });
+                var outcome = await _playbackControlService.HandleResumeOnPlaybackStartAsync(
+                    _sessionState,
+                    _playbackParams,
+                    () => GetCurrentPlaybackPosition(),
+                    CompleteHlsResumeFix,
+                    HandleResumeFailureAsync);
 
                 if (outcome.Success)
                 {
@@ -1712,8 +2084,6 @@ namespace Gelatinarm.ViewModels
                 return;
             }
 
-            _sessionState.HasPerformedInitialSeek = true;
-
             var context = CreateErrorContext("ResumePlayback", ErrorCategory.Media, ErrorSeverity.Error);
             var resumeException = new ResumeStuckException(failureContext.CurrentPosition, failureContext.TargetPosition, failureContext.RetryCount);
 
@@ -1721,7 +2091,11 @@ namespace Gelatinarm.ViewModels
 
             await Task.Delay(100);
 
-            if (_navigationService?.CanGoBack == true)
+            if (_mediaNavigationService != null)
+            {
+                await _mediaNavigationService.NavigateBackToOriginAsync();
+            }
+            else if (_navigationService?.CanGoBack == true)
             {
                 _navigationService.GoBack();
             }
@@ -1729,7 +2103,7 @@ namespace Gelatinarm.ViewModels
 
         public void SetControlsVisible(bool visible)
         {
-            _mediaControllerService?.SetControlsVisible(visible);
+            _controllerInputService?.SetControlsVisible(visible);
         }
 
         public void ClearSkipFlag()
@@ -1811,7 +2185,11 @@ namespace Gelatinarm.ViewModels
                     case MediaAction.NavigateBack:
                         // Navigate back to the previous page
                         // Use smart navigation if we have a navigation source page
-                        if (_currentPlaybackParams?.NavigationSourcePage != null)
+                        if (_mediaNavigationService != null)
+                        {
+                            await _mediaNavigationService.NavigateBackToOriginAsync();
+                        }
+                        else if (_currentPlaybackParams?.NavigationSourcePage != null)
                         {
                             Logger.LogInformation($"Smart back navigation: Going to {_currentPlaybackParams.NavigationSourcePage.Name}");
                             _navigationService.Navigate(_currentPlaybackParams.NavigationSourcePage, _currentPlaybackParams.NavigationSourceParameter);
@@ -1835,18 +2213,6 @@ namespace Gelatinarm.ViewModels
             {
                 Logger.LogError(ex, $"Error handling controller action: {action}");
             }
-        }
-
-        private async void OnSegmentAvailabilityChanged(object sender, EventArgs e)
-        {
-            // Update skip button visibility based on current position
-            // Don't wait for video frame as it may not fire for HLS
-            await UpdateSkipButtonVisibilityAsync();
-        }
-
-        private void OnSegmentSkipped(object sender, SkipSegmentType segmentType)
-        {
-            Logger.LogInformation($"Skipped {segmentType} segment");
         }
 
         // NOTE: VideoFrameAvailable event removed - it requires IsVideoFrameServerEnabled=true
@@ -1890,12 +2256,15 @@ namespace Gelatinarm.ViewModels
         /// </summary>
         private async Task UpdateSkipButtonVisibilityAsync()
         {
-            if (_skipSegmentService == null)
+            if (!_introStartTime.HasValue || !_introEndTime.HasValue)
             {
-                return;
+                if (!_outroStartTime.HasValue || !_outroEndTime.HasValue)
+                {
+                    return;
+                }
             }
 
-            var currentSegment = _skipSegmentService.GetCurrentSegmentType(Position);
+            var currentSegment = GetCurrentSegmentType(Position);
 
             // Track previous state for logging
             var wasIntroAvailable = IsIntroSkipAvailable;
@@ -1921,6 +2290,40 @@ namespace Gelatinarm.ViewModels
             {
                 Logger.LogInformation(
                     $"Outro skip button visibility changed to: {IsOutroSkipAvailable} at position {Position:mm\\:ss}");
+            }
+        }
+
+        private SkipSegmentType? GetCurrentSegmentType(TimeSpan position)
+        {
+            if (_introStartTime.HasValue && _introEndTime.HasValue &&
+                position >= _introStartTime.Value && position < _introEndTime.Value)
+            {
+                return SkipSegmentType.Intro;
+            }
+
+            if (_outroStartTime.HasValue && _outroEndTime.HasValue &&
+                position >= _outroStartTime.Value && position < _outroEndTime.Value)
+            {
+                return SkipSegmentType.Outro;
+            }
+
+            return null;
+        }
+
+        private MediaPlaybackState? GetPlaybackStateSnapshot()
+        {
+            if (_hasPlaybackStateSnapshot)
+            {
+                return _lastPlaybackState;
+            }
+
+            try
+            {
+                return MediaPlayerElement?.MediaPlayer?.PlaybackSession?.PlaybackState;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -2005,9 +2408,10 @@ namespace Gelatinarm.ViewModels
             Logger.LogInformation("[HLS-MANIFEST-CHANGE] Applying immediate seek to position 0 of new manifest");
             if (MediaPlayerElement?.MediaPlayer?.PlaybackSession != null)
             {
+                NoteSeekStarted("manifest change");
                 MediaPlayerElement.MediaPlayer.PlaybackSession.Position = TimeSpan.Zero;
                 CompleteHlsResumeFix();
-                Logger.LogInformation($"[HLS-MANIFEST-CHANGE] Seeked to position 0, playback should continue from {_sessionState.HlsManifestOffset:mm\\:ss}");
+                Logger.LogInformation($"[HLS-MANIFEST-CHANGE] Seeked to position 0, playback should continue from {_playbackControlService?.HlsManifestOffset:mm\\:ss}");
             }
         }
 
@@ -2098,7 +2502,7 @@ namespace Gelatinarm.ViewModels
                     return;
                 }
 
-                if (_hasReportedPlaybackStart && !string.IsNullOrEmpty(_playSessionId) && !IsPaused)
+                if (!string.IsNullOrEmpty(_playSessionId) && !IsPaused)
                 {
                     if (_mediaPlaybackService is IMediaSessionService sessionService)
                     {
@@ -2313,9 +2717,9 @@ namespace Gelatinarm.ViewModels
             return _mediaNavigationService;
         }
 
-        public IMediaControllerService GetMediaControllerService()
+        public IControllerInputService GetControllerInputService()
         {
-            return _mediaControllerService;
+            return _controllerInputService;
         }
 
         // Stop all timers immediately - called when navigating away
@@ -2353,6 +2757,7 @@ namespace Gelatinarm.ViewModels
             }
 
             RestartTimers();
+            SyncBufferingTimeoutFromSession();
         }
 
         private void RestartTimers()
@@ -2367,15 +2772,41 @@ namespace Gelatinarm.ViewModels
 
             _positionTimer?.Start();
             _controlVisibilityTimer?.Start();
-            _statsUpdateTimer?.Start();
-
-            if (IsBuffering)
+            if (IsStatsVisible)
             {
-                _bufferingTimeoutTimer?.Start();
+                _statsUpdateTimer?.Start();
+                UpdatePlaybackStats();
             }
-            else
+        }
+
+        private void SyncBufferingTimeoutFromSession()
+        {
+            try
             {
+                var session = MediaPlayerElement?.MediaPlayer?.PlaybackSession;
+                if (session == null)
+                {
+                    return;
+                }
+
+                var isBuffering = session.PlaybackState == MediaPlaybackState.Buffering;
+                if (isBuffering)
+                {
+                    if (!_bufferingStartTime.HasValue)
+                    {
+                        _bufferingStartTime = DateTime.UtcNow;
+                        _bufferingTimeoutTimer?.Start();
+                        Logger.LogInformation("[BUFFERING-TIMEOUT] Resume sync detected buffering; starting timer");
+                    }
+                    return;
+                }
+
+                _bufferingStartTime = null;
                 _bufferingTimeoutTimer?.Stop();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to sync buffering timeout state on resume");
             }
         }
 
@@ -2385,7 +2816,7 @@ namespace Gelatinarm.ViewModels
             // Note: Timer stopping moved to StopTimers() which is called earlier
 
             // Report playback stopped if we have a session
-            if (_hasReportedPlaybackStart && !string.IsNullOrEmpty(_playSessionId))
+            if (!string.IsNullOrEmpty(_playSessionId))
             {
                 try
                 {
@@ -2396,7 +2827,6 @@ namespace Gelatinarm.ViewModels
                         await sessionService.ReportPlaybackStoppedAsync(_playSessionId, position);
                         Logger.LogInformation("Playback stopped reported successfully");
                     }
-                    _hasReportedPlaybackStart = false; // Prevent duplicate reports
                 }
                 catch (Exception ex)
                 {
@@ -2449,9 +2879,12 @@ namespace Gelatinarm.ViewModels
 
         private void SetHlsManifestOffset(TimeSpan offset, bool markApplied, string context)
         {
-            _sessionState.HlsManifestOffset = offset;
             _sessionState.HlsManifestOffsetApplied = markApplied;
             _sessionState.ExpectedHlsSeekTarget = TimeSpan.Zero;
+            if (_playbackControlService != null)
+            {
+                _playbackControlService.HlsManifestOffset = offset;
+            }
 
             Logger.LogInformation($"[HLS-MANIFEST-CHANGE] {context} Position 0 in new manifest = {offset:mm\\:ss}");
         }
@@ -2468,9 +2901,12 @@ namespace Gelatinarm.ViewModels
 
             var currentPosition = Position; // Includes offset if present
             _sessionState.PendingSeekPositionAfterQualitySwitch = currentPosition.Ticks;
-            _sessionState.HlsManifestOffset = TimeSpan.Zero;
             _sessionState.HlsManifestOffsetApplied = false;
             _sessionState.IsHlsTrackChange = false;
+            if (_playbackControlService != null)
+            {
+                _playbackControlService.HlsManifestOffset = TimeSpan.Zero;
+            }
 
             Logger?.LogInformation($"[HLS] Track change will resume to {currentPosition:hh\\:mm\\:ss}");
         }
@@ -2510,21 +2946,22 @@ namespace Gelatinarm.ViewModels
         {
             // Only apply fix if we have a manifest offset (from track change or large seek)
             // Initial resume doesn't use manifest offset - it's just a client-side seek
-            if (!_sessionState.IsHlsStream || _sessionState.HlsManifestOffset <= TimeSpan.Zero)
+            if (!_sessionState.IsHlsStream || _playbackControlService?.HlsManifestOffset <= TimeSpan.Zero)
             {
                 return false;
             }
 
             // Apply fix for track changes or large seeks that create new manifests
             var shouldApply = _sessionState.IsHlsTrackChange ||
-                (_sessionState.HlsManifestOffset > TimeSpan.Zero && !_sessionState.HlsManifestOffsetApplied);
+                (_playbackControlService?.HlsManifestOffset > TimeSpan.Zero && !_sessionState.HlsManifestOffsetApplied);
             if (!shouldApply)
             {
                 return false;
             }
 
             var rawPosition = session?.Position ?? TimeSpan.Zero;
-            var diff = Math.Abs((rawPosition - _sessionState.HlsManifestOffset).TotalSeconds);
+            var offset = _playbackControlService?.HlsManifestOffset ?? TimeSpan.Zero;
+            var diff = Math.Abs((rawPosition - offset).TotalSeconds);
             return diff < 10;
         }
 
@@ -2546,6 +2983,7 @@ namespace Gelatinarm.ViewModels
                 session.MediaPlayer.Pause();
             }
 
+            NoteSeekStarted("manifest offset fix");
             session.Position = TimeSpan.Zero;
             Logger.LogInformation($"[HLS-RESUME] Seeked to position 0, new position: {session.Position:mm\\:ss}");
             CompleteHlsResumeFix();
@@ -2576,6 +3014,12 @@ namespace Gelatinarm.ViewModels
             _actualResumePosition = TimeSpan.Zero;
         }
 
+        private void ResetPlaybackStateSnapshot()
+        {
+            _lastPlaybackState = MediaPlaybackState.None;
+            _hasPlaybackStateSnapshot = false;
+        }
+
         #endregion
 
         // Cleanup remaining resources after stop is reported
@@ -2596,20 +3040,17 @@ namespace Gelatinarm.ViewModels
             // This method now handles only async cleanup that doesn't block navigation
 
             // Don't dispose singleton services - they need to maintain state across episode transitions
-            // Singletons: MediaControlService, PlaybackControlService, SubtitleService, MediaNavigationService,
-            //            PlaybackStatisticsService, SkipSegmentService
+            // Singletons: MediaControlService, PlaybackControlService, SubtitleService, MediaQueueService,
             // These will be re-initialized with the new MediaPlayer in the next episode's InitializeAsync call.
 
-            // Stop statistics updates (but don't dispose the service)
-            try
-            {
-                _playbackStatisticsService?.StopUpdating();
-                Logger.LogInformation("PlaybackStatisticsService updates stopped");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to stop statistics updates during cleanup");
-            }
+            _statsMediaSource = null;
+            _introStartTime = null;
+            _introEndTime = null;
+            _outroStartTime = null;
+            _outroEndTime = null;
+            _hasAutoSkippedIntro = false;
+            _hasAutoSkippedOutro = false;
+            Logger.LogInformation("Cleared playback stats and skip segment state");
 
             // Note: MediaPlayer event cleanup skipped here to avoid cross-thread access
             // MediaPlayerElement can only be accessed from UI thread
@@ -2667,22 +3108,13 @@ namespace Gelatinarm.ViewModels
                 _mediaNavigationService.NavigationStateChanged -= OnNavigationStateChanged;
             }
 
-            if (_playbackStatisticsService != null)
+
+            if (_controllerInputService != null)
             {
-                _playbackStatisticsService.StatsUpdated -= OnStatsUpdated;
+                _controllerInputService.ActionTriggered -= OnControllerActionTriggered;
+                _controllerInputService.ActionWithParameterTriggered -= OnControllerActionWithParameterTriggered;
             }
 
-            if (_mediaControllerService != null)
-            {
-                _mediaControllerService.ActionTriggered -= OnControllerActionTriggered;
-                _mediaControllerService.ActionWithParameterTriggered -= OnControllerActionWithParameterTriggered;
-            }
-
-            if (_skipSegmentService != null)
-            {
-                _skipSegmentService.SegmentAvailabilityChanged -= OnSegmentAvailabilityChanged;
-                _skipSegmentService.SegmentSkipped -= OnSegmentSkipped;
-            }
 
             if (MediaPlayerElement?.MediaPlayer != null)
             {
@@ -2692,9 +3124,9 @@ namespace Gelatinarm.ViewModels
                 MediaPlayerElement.MediaPlayer.PlaybackSession.PlaybackStateChanged -= OnPlaybackStateChanged;
             }
 
-            // Only dispose transient services (MediaControllerService is transient)
+            // Only dispose transient services (ControllerInputService is transient)
             // Don't dispose singleton services as they need to maintain state
-            _mediaControllerService?.Dispose();
+            _controllerInputService?.Dispose();
 
             base.DisposeManaged();
         }

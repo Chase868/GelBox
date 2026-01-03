@@ -7,31 +7,12 @@ using Gelatinarm.Constants;
 using Gelatinarm.Helpers;
 using Gelatinarm.Views;
 using Jellyfin.Sdk.Generated.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 
 namespace Gelatinarm.Services
 {
-    public interface INavigationService : IDisposable
-    {
-        bool CanGoBack { get; }
-        bool IsNavigating { get; }
-        event EventHandler<Type> Navigated;
-        void Initialize(Frame frame);
-        bool Navigate(Type pageType, object parameter = null);
-        Task<bool> NavigateAsync(Type pageType, object parameter = null);
-        void NavigateToHome();
-        void NavigateToSettings();
-        void NavigateToSearch(object parameter = null);
-        void NavigateToFavorites();
-        void NavigateToLibrary();
-        void NavigateToItemDetails(BaseItemDto item);
-        bool GoBack();
-        object GetLastNavigationParameter();
-    }
-
     /// <summary>
     ///     Navigation service that combines navigation and state management
     /// </summary>

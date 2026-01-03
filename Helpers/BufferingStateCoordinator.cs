@@ -20,14 +20,20 @@ namespace Gelatinarm.Helpers
             var result = new BufferingStateResult
             {
                 BufferingStartTime = request.BufferingStartTime,
-                ExpectedHlsSeekTarget = request.ExpectedHlsSeekTarget,
-                HlsManifestOffset = request.HlsManifestOffset,
-                HlsManifestOffsetApplied = request.HlsManifestOffsetApplied
+                ExpectedHlsSeekTarget = request.ExpectedHlsSeekTarget
             };
 
-            if (request.IsBuffering && !request.WasBuffering)
+            if (request.IsBuffering && !request.BufferingStartTime.HasValue)
             {
-                _logger.LogInformation($"Buffering started at position {request.Position:hh\\:mm\\:ss}, HLS: {request.IsHls}");
+                var isRecentSeek = request.PendingSeekCount > 0 ||
+                                   (request.LastSeekTime != DateTime.MinValue &&
+                                    DateTime.UtcNow - request.LastSeekTime < TimeSpan.FromSeconds(2));
+                var seekLabel = isRecentSeek ? " (after seek)" : string.Empty;
+                var lastSeekAge = request.LastSeekTime == DateTime.MinValue
+                    ? "n/a"
+                    : $"{(DateTime.UtcNow - request.LastSeekTime).TotalSeconds:F1}s";
+                _logger.LogInformation($"Buffering started at position {request.Position:hh\\:mm\\:ss}, HLS: {request.IsHls}{seekLabel}, " +
+                                       $"PendingSeeks: {request.PendingSeekCount}, LastSeekAge: {lastSeekAge}");
 
                 if (request.IsHls && request.ExpectedHlsSeekTarget > TimeSpan.Zero)
                 {
@@ -41,7 +47,6 @@ namespace Gelatinarm.Helpers
                         {
                             _logger.LogInformation($"[HLS-MANIFEST-CHANGE] Detected during buffering. Natural: {naturalDuration:hh\\:mm\\:ss}, Metadata: {metadataDuration:hh\\:mm\\:ss}");
                             result.HlsManifestOffset = request.ExpectedHlsSeekTarget;
-                            result.HlsManifestOffsetApplied = false;
                             result.ExpectedHlsSeekTarget = TimeSpan.Zero;
                             _logger.LogInformation($"[HLS-MANIFEST-CHANGE] Position 0 in new manifest = {result.HlsManifestOffset:hh\\:mm\\:ss}");
                         }
@@ -49,13 +54,13 @@ namespace Gelatinarm.Helpers
                 }
 
                 result.BufferingStartTime = DateTime.UtcNow;
-                result.TriggerHlsBufferingFix = true;
+                result.TriggerHlsBufferingFix = request.IsHls && (request.HasManifestOffset || request.IsHlsTrackChange);
                 result.StartTimeoutTimer = true;
                 _logger.LogInformation($"[BUFFERING-TIMEOUT] Started {_timeoutSeconds}s timeout timer for {(request.IsHls ? "HLS" : "direct")} stream");
                 return result;
             }
 
-            if (!request.IsBuffering && request.WasBuffering)
+            if (!request.IsBuffering && request.BufferingStartTime.HasValue)
             {
                 _logger.LogInformation($"Buffering ended at position {request.Position:hh\\:mm\\:ss}, transitioning to {request.NewState}");
 
@@ -77,16 +82,17 @@ namespace Gelatinarm.Helpers
     public sealed class BufferingStateRequest
     {
         public bool IsBuffering { get; set; }
-        public bool WasBuffering { get; set; }
         public bool IsHls { get; set; }
+        public bool IsHlsTrackChange { get; set; }
+        public bool HasManifestOffset { get; set; }
         public MediaPlaybackState NewState { get; set; }
         public TimeSpan Position { get; set; }
         public TimeSpan ExpectedHlsSeekTarget { get; set; }
         public TimeSpan NaturalDuration { get; set; }
         public TimeSpan MetadataDuration { get; set; }
+        public DateTime LastSeekTime { get; set; }
+        public int PendingSeekCount { get; set; }
         public DateTime? BufferingStartTime { get; set; }
-        public TimeSpan HlsManifestOffset { get; set; }
-        public bool HlsManifestOffsetApplied { get; set; }
     }
 
     public sealed class BufferingStateResult
@@ -94,7 +100,6 @@ namespace Gelatinarm.Helpers
         public DateTime? BufferingStartTime { get; set; }
         public TimeSpan ExpectedHlsSeekTarget { get; set; }
         public TimeSpan HlsManifestOffset { get; set; }
-        public bool HlsManifestOffsetApplied { get; set; }
         public bool StartTimeoutTimer { get; set; }
         public bool StopTimeoutTimer { get; set; }
         public bool TriggerHlsBufferingFix { get; set; }

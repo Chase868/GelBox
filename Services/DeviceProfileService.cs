@@ -5,11 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelatinarm.Services
 {
-    public interface IDeviceProfileService
-    {
-        DeviceProfile GetDeviceProfile();
-    }
-
     public class DeviceProfileService : BaseService, IDeviceProfileService
     {
         private readonly IUnifiedDeviceService _deviceService;

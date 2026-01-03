@@ -507,14 +507,16 @@ namespace Gelatinarm
             services.AddSingleton<IMemoryMonitor>(sp => sp.GetRequiredService<SystemMonitorService>());
             services.AddSingleton<INetworkMonitor>(sp => sp.GetRequiredService<SystemMonitorService>());
 
-            // Register consolidated MediaOptimizationService
-            services.AddSingleton<IEpisodeQueueService>(provider =>
+            services.AddSingleton<MediaQueueService>(provider =>
             {
                 var apiClient = provider.GetRequiredService<JellyfinApiClient>();
-                var logger = provider.GetRequiredService<ILogger<EpisodeQueueService>>();
                 var userProfileService = provider.GetRequiredService<IUserProfileService>();
-                return new EpisodeQueueService(apiClient, logger, userProfileService);
+                var navigationService = provider.GetRequiredService<INavigationService>();
+                var navigationStateService = provider.GetRequiredService<INavigationStateService>();
+                var logger = provider.GetRequiredService<ILogger<MediaQueueService>>();
+                return new MediaQueueService(apiClient, userProfileService, navigationService, navigationStateService, logger);
             });
+            services.AddSingleton<IEpisodeQueueService>(sp => sp.GetRequiredService<MediaQueueService>());
 
             services.AddSingleton<IImageLoadingService>(provider =>
             {
@@ -560,10 +562,8 @@ namespace Gelatinarm
 
 
             // Register new decomposed services for MusicPlayer
-            services.AddSingleton<IPlaybackQueueService, PlaybackQueueService>();
+            services.AddSingleton<IPlaybackQueueService>(sp => sp.GetRequiredService<MediaQueueService>());
             services.AddSingleton<IMediaControlService, MediaControlService>();
-            services.AddSingleton<ISystemMediaIntegrationService, SystemMediaIntegrationService>();
-            services.AddSingleton<IPlaybackRestartService, PlaybackRestartService>();
             services.AddSingleton<IPlaybackControlService, PlaybackControlService>();
             services.AddSingleton<ISubtitleService>(provider =>
             {
@@ -576,10 +576,8 @@ namespace Gelatinarm
                 return new SubtitleService(logger, playbackControlService, preferencesService,
                     mediaControlService, authService, apiClient);
             });
-            services.AddSingleton<IMediaNavigationService, MediaNavigationService>();
-            services.AddSingleton<IPlaybackStatisticsService, PlaybackStatisticsService>();
-            services.AddTransient<IMediaControllerService, MediaControllerService>();
-            services.AddSingleton<ISkipSegmentService, SkipSegmentService>();
+            services.AddSingleton<IMediaNavigationService>(sp => sp.GetRequiredService<MediaQueueService>());
+            services.AddTransient<IControllerInputService, ControllerInputService>();
 
             services.AddSingleton<IMusicPlayerService>(provider =>
             {
@@ -592,11 +590,9 @@ namespace Gelatinarm
                 var mediaOptimizationService = provider.GetRequiredService<IMediaOptimizationService>();
                 var queueService = provider.GetRequiredService<IPlaybackQueueService>();
                 var mediaControlService = provider.GetRequiredService<IMediaControlService>();
-                var systemMediaService = provider.GetRequiredService<ISystemMediaIntegrationService>();
                 var apiClient = provider.GetRequiredService<JellyfinApiClient>();
                 return new MusicPlayerService(logger, provider, apiClient, authService, userProfileService, mediaPlaybackService,
-                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService,
-                    systemMediaService);
+                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService);
             });
 
             try

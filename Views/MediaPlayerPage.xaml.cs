@@ -749,11 +749,11 @@ namespace Gelatinarm.Views
                 // Enable XY focus navigation for analog stick when controls are visible
                 XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Enabled;
 
-                // Notify MediaControllerService if requested
+                // Notify ControllerInputService if requested
                 if (updateMediaController && ViewModel != null)
                 {
                     ViewModel.SetControlsVisible(true);
-                    Logger?.LogInformation("Notified MediaControllerService of visibility change to true");
+                    Logger?.LogInformation("Notified ControllerInputService of visibility change to true");
                 }
 
                 // Reset the timer for auto-hide
@@ -810,11 +810,11 @@ namespace Gelatinarm.Views
                 // Disable XY focus navigation when controls are hidden to prevent analog stick navigation
                 XYFocusKeyboardNavigation = XYFocusKeyboardNavigationMode.Disabled;
 
-                // Notify MediaControllerService
+                // Notify ControllerInputService
                 if (ViewModel != null)
                 {
                     ViewModel.SetControlsVisible(false);
-                    Logger?.LogInformation("Notified MediaControllerService of visibility change to false");
+                    Logger?.LogInformation("Notified ControllerInputService of visibility change to false");
                 }
 
                 FocusOverlayOrPlayer();
@@ -1215,18 +1215,18 @@ namespace Gelatinarm.Views
                 ResetControlVisibilityTimer();
             }
 
-            // Delegate all input handling to MediaControllerService
+            // Delegate all input handling to ControllerInputService
             // Use the same instance that the ViewModel is subscribed to
-            var mediaControllerService = ViewModel?.GetMediaControllerService();
-            if (mediaControllerService != null)
+            var controllerInputService = ViewModel?.GetControllerInputService();
+            if (controllerInputService != null)
             {
-                var handled = await mediaControllerService.HandleKeyDownAsync(e.Key);
+                var handled = await controllerInputService.HandleKeyDownAsync(e.Key);
                 e.Handled = handled;
-                Logger?.LogInformation($"MediaControllerService handled key {e.Key}: {handled}");
+                Logger?.LogInformation($"ControllerInputService handled key {e.Key}: {handled}");
             }
             else
             {
-                Logger?.LogError("MediaControllerService is null or ViewModel not available!");
+                Logger?.LogError("ControllerInputService is null or ViewModel not available!");
             }
         }
 
@@ -1429,7 +1429,7 @@ namespace Gelatinarm.Views
         {
             try
             {
-                Logger?.LogInformation($"Window visibility changed: Visible={e.Visible}");
+                Logger?.LogInformation($"Window visibility changed: Visible={e.Visible}, WasInBackground={_isInBackground}");
                 FireAndForget(() => HandleAppBackgroundChangedAsync(!e.Visible), "HandleAppBackgroundChanged");
             }
             catch (Exception ex)
@@ -1446,6 +1446,15 @@ namespace Gelatinarm.Views
             }
 
             _isInBackground = isInBackground;
+            try
+            {
+                var playbackState = MediaPlayer?.MediaPlayer?.PlaybackSession?.PlaybackState;
+                Logger?.LogInformation($"App background change: IsInBackground={isInBackground}, PlaybackState={playbackState}");
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogDebug(ex, "Failed to read playback state during background change");
+            }
 
             if (isInBackground)
             {
