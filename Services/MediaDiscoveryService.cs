@@ -16,7 +16,7 @@ namespace Gelatinarm.Services
     {
         private const int MAX_SEARCH_HISTORY = 10;
         private static readonly ItemFields[] DefaultItemFields =
-            { ItemFields.Overview, ItemFields.PrimaryImageAspectRatio };
+            { ItemFields.Overview, ItemFields.PrimaryImageAspectRatio, ItemFields.MediaSources, ItemFields.MediaStreams };
         private static readonly ImageType[] DefaultImageTypes =
             { ImageType.Primary, ImageType.Banner, ImageType.Thumb };
         private readonly JellyfinApiClient _apiClient;

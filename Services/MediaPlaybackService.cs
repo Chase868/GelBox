@@ -182,6 +182,7 @@ namespace Gelatinarm.Services
                     async () => await _apiClient.Items[itemGuid].GetAsync(config =>
                     {
                         config.QueryParameters.UserId = userGuid;
+                        // Note: Individual item endpoint returns all fields by default, Fields parameter not supported
                     }, cancellationToken).ConfigureAwait(false),
                     cancellationToken: cancellationToken
                 ).ConfigureAwait(false);

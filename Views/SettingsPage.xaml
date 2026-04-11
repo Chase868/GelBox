@@ -197,6 +197,54 @@
                         TextWrapping="Wrap"
                         FontSize="12" />
 
+                    <ToggleSwitch Header="Volume Normalization"
+                                  IsOn="{x:Bind TypedViewModel.PlaybackSettings.EnableVolumeNormalization, Mode=TwoWay}"
+                                  Style="{StaticResource StandardToggleSwitchStyle}"
+                                  OnContent="Normalize volume using LUFS data"
+                                  OffContent="Play at original volume levels" />
+                    <TextBlock
+                        Text="Automatically adjusts volume levels to compensate for differences between tracks. Uses Loudness Units Full Scale (LUFS) data calculated by the Jellyfin server."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
+                    <ToggleSwitch Header="Album Gain Mode"
+                                  IsOn="{x:Bind TypedViewModel.PlaybackSettings.UseAlbumGain, Mode=TwoWay}"
+                                  Style="{StaticResource StandardToggleSwitchStyle}"
+                                  OnContent="Use album-level normalization"
+                                  OffContent="Use track-level normalization" />
+                    <TextBlock
+                        Text="When enabled, uses the same volume adjustment for all tracks in an album. When disabled, adjusts each track individually. Requires Volume Normalization to be enabled."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
+                    <StackPanel>
+                        <TextBlock>
+                            <Run Text="LUFS Target Level: " />
+                            <Run Text="{x:Bind TypedViewModel.PlaybackSettings.LufsTarget, Mode=OneWay}" />
+                            <Run Text=" LUFS" />
+                        </TextBlock>
+                        <Slider Minimum="-30"
+                                Maximum="-10"
+                                Value="{x:Bind TypedViewModel.PlaybackSettings.LufsTarget, Mode=TwoWay}"
+                                StepFrequency="0.5"
+                                TickFrequency="2"
+                                SnapsTo="StepValues"
+                                Style="{StaticResource StandardSliderStyle}" />
+                    </StackPanel>
+                    <TextBlock
+                        Text="Adjusts the target loudness level for volume normalization. Lower values (-23 to -30) provide quieter, more consistent playback. Higher values (-16 to -10) allow louder playback but with more variation between tracks."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
 
                 </StackPanel>
             </StackPanel>

@@ -31,6 +31,7 @@ namespace Gelatinarm.Services
         private readonly IPlaybackQueueService _queueService;
         private readonly IServiceProvider _serviceProvider;
         private readonly IUserProfileService _userProfileService;
+        private readonly IVolumeNormalizationService _volumeNormalizationService;
         private MediaSourceInfo _currentMediaSource;
         private string _currentPlaySessionId;
         private bool _isInFallbackMode = false;
@@ -55,7 +56,8 @@ namespace Gelatinarm.Services
             IPreferencesService preferencesService,
             IMediaOptimizationService mediaOptimizationService,
             IPlaybackQueueService queueService,
-            IMediaControlService mediaControlService) : base(logger)
+            IMediaControlService mediaControlService,
+            IVolumeNormalizationService volumeNormalizationService) : base(logger)
         {
             _serviceProvider = serviceProvider;
             _apiClient = apiClient;
@@ -67,6 +69,7 @@ namespace Gelatinarm.Services
             _mediaOptimizationService = mediaOptimizationService;
             _queueService = queueService;
             _mediaControlService = mediaControlService;
+            _volumeNormalizationService = volumeNormalizationService ?? throw new ArgumentNullException(nameof(volumeNormalizationService));
 
             // Don't subscribe to events in constructor - wait until audio playback starts
             // Initialize();
@@ -1479,6 +1482,29 @@ namespace Gelatinarm.Services
                     Logger.LogInformation("Setting new MediaPlaybackItem as source");
                     _lastPlaybackStartTime = DateTime.UtcNow;
                     await _mediaControlService.SetMediaSource(playbackItem, item).ConfigureAwait(false);
+
+                    // Apply volume normalization for audio items
+                    if (item.Type == BaseItemDto_Type.Audio)
+                    {
+                        var normalizationItem = item;
+                        try
+                        {
+                            var fullItem = await _mediaPlaybackService.GetItemAsync(item.Id?.ToString(), CancellationToken.None).ConfigureAwait(false);
+                            if (fullItem != null)
+                            {
+                                normalizationItem = fullItem;
+                                Logger.LogInformation("Loaded full item metadata for volume normalization");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogWarning(ex, "Failed to refresh item metadata for normalization, using original item");
+                        }
+
+                        await _volumeNormalizationService.ApplyVolumeNormalizationAsync(
+                            _mediaControlService.MediaPlayer, normalizationItem).ConfigureAwait(false);
+                    }
+
                     _mediaControlService.Play();
 
                     Logger.LogInformation("Successfully set media source and started playback");

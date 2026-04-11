@@ -27,6 +27,7 @@ namespace Gelatinarm.Services
         private readonly IMemoryMonitor _memoryMonitor;
         private readonly INetworkMonitor _networkMonitor;
         private readonly IPreferencesService _preferencesService;
+        private readonly IVolumeNormalizationService _volumeNormalizationService;
         private readonly ConcurrentDictionary<string, Task<MediaSource>> _preloadTasks = new();
         private readonly Task _initializationTask;
         private int _currentBandwidthKbps = 0;
@@ -45,13 +46,15 @@ namespace Gelatinarm.Services
             IPreferencesService preferencesService,
             IUnifiedDeviceService deviceService,
             IMemoryMonitor memoryMonitor,
-            INetworkMonitor networkMonitor) : base(logger)
+            INetworkMonitor networkMonitor,
+            IVolumeNormalizationService volumeNormalizationService) : base(logger)
         {
             _httpClientFactory = httpClientFactory;
             _preferencesService = preferencesService;
             _deviceService = deviceService;
             _memoryMonitor = memoryMonitor;
             _networkMonitor = networkMonitor;
+            _volumeNormalizationService = volumeNormalizationService ?? throw new ArgumentNullException(nameof(volumeNormalizationService));
 
             // Start initialization but don't await - will be awaited when needed
             _initializationTask = InitializeAsync();
@@ -315,6 +318,11 @@ namespace Gelatinarm.Services
 
         public async Task ApplyAudioEnhancementsAsync(MediaPlayer player)
         {
+            await ApplyAudioEnhancementsAsync(player, null).ConfigureAwait(false);
+        }
+
+        public async Task ApplyAudioEnhancementsAsync(MediaPlayer player, BaseItemDto item)
+        {
             if (!IsEnhancementEnabled || player == null)
             {
                 return;
@@ -341,7 +349,13 @@ namespace Gelatinarm.Services
                     player.AudioDeviceType = MediaPlayerAudioDeviceType.Multimedia;
                 }
 
-                Logger.LogInformation($"Audio enhancements applied - Night: {_nightModeEnabled}");
+                // Apply volume normalization if item is provided
+                if (item != null)
+                {
+                    await _volumeNormalizationService.ApplyVolumeNormalizationAsync(player, item).ConfigureAwait(false);
+                }
+
+                Logger.LogInformation($"Audio enhancements applied - Night: {_nightModeEnabled}, Item: {item?.Name ?? "None"}");
                 await Task.CompletedTask.ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -351,6 +365,11 @@ namespace Gelatinarm.Services
         }
 
         public async Task ConfigureForXboxAsync(MediaPlayer player, MediaSourceInfo mediaSourceInfo)
+        {
+            await ConfigureForXboxAsync(player, mediaSourceInfo, null).ConfigureAwait(false);
+        }
+
+        public async Task ConfigureForXboxAsync(MediaPlayer player, MediaSourceInfo mediaSourceInfo, BaseItemDto item)
         {
             if (!_deviceService.IsXboxEnvironment || player == null)
             {
@@ -365,7 +384,7 @@ namespace Gelatinarm.Services
 
                 // Apply both video and audio enhancements
                 await ApplyVideoEnhancementsAsync(player, mediaSourceInfo).ConfigureAwait(false);
-                await ApplyAudioEnhancementsAsync(player).ConfigureAwait(false);
+                await ApplyAudioEnhancementsAsync(player, item).ConfigureAwait(false);
 
                 Logger.LogInformation("Xbox-specific optimizations applied");
             }

@@ -210,6 +210,7 @@
     <Compile Include="Services\PlaybackSourceResolver.cs" />
     <Compile Include="Services\SubtitleService.cs" />
     <Compile Include="Services\UserDataService.cs" />
+    <Compile Include="Services\VolumeNormalizationService.cs" />
     <!-- ViewModels -->
     <Compile Include="ViewModels\BaseViewModel.cs" />
     <Compile Include="ViewModels\FavoritesViewModel.cs" />

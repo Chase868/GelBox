@@ -532,6 +532,8 @@ namespace Gelatinarm
                 return new UserDataService(logger, apiClient, userProfileService);
             });
 
+            services.AddSingleton<IVolumeNormalizationService, VolumeNormalizationService>();
+
             services.AddSingleton<IMediaOptimizationService>(provider =>
             {
                 var logger = provider.GetRequiredService<ILogger<MediaOptimizationService>>();
@@ -540,8 +542,9 @@ namespace Gelatinarm
                 var memoryMonitor = provider.GetRequiredService<IMemoryMonitor>();
                 var networkMonitor = provider.GetRequiredService<INetworkMonitor>();
                 var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
+                var volumeNormalizationService = provider.GetRequiredService<IVolumeNormalizationService>();
                 return new MediaOptimizationService(logger, httpClientFactory, preferencesService, deviceService, memoryMonitor,
-                    networkMonitor);
+                    networkMonitor, volumeNormalizationService);
             });
 
             services.AddSingleton<IDeviceProfileService, DeviceProfileService>();
@@ -591,8 +594,9 @@ namespace Gelatinarm
                 var queueService = provider.GetRequiredService<IPlaybackQueueService>();
                 var mediaControlService = provider.GetRequiredService<IMediaControlService>();
                 var apiClient = provider.GetRequiredService<JellyfinApiClient>();
+                var volumeNormalizationService = provider.GetRequiredService<IVolumeNormalizationService>();
                 return new MusicPlayerService(logger, provider, apiClient, authService, userProfileService, mediaPlaybackService,
-                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService);
+                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService, volumeNormalizationService);
             });
 
             try

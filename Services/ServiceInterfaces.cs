@@ -416,7 +416,9 @@ namespace Gelatinarm.Services
         bool IsOptimizationEnabled { get; }
         Task ApplyVideoEnhancementsAsync(MediaPlayer player, MediaSourceInfo mediaSourceInfo);
         Task ApplyAudioEnhancementsAsync(MediaPlayer player);
+        Task ApplyAudioEnhancementsAsync(MediaPlayer player, BaseItemDto item);
         Task ConfigureForXboxAsync(MediaPlayer player, MediaSourceInfo mediaSourceInfo);
+        Task ConfigureForXboxAsync(MediaPlayer player, MediaSourceInfo mediaSourceInfo, BaseItemDto item);
         Task ResetEnhancementsAsync(MediaPlayer player);
 
         // Audio Enhancement Settings
@@ -457,6 +459,27 @@ namespace Gelatinarm.Services
             string accessToken,
             bool isAudio,
             IPreferencesService preferences = null);
+    }
+
+    /// <summary>
+    /// Service for handling volume normalization using LUFS data from Jellyfin
+    /// </summary>
+    public interface IVolumeNormalizationService
+    {
+        /// <summary>
+        /// Applies volume normalization to a MediaPlayer based on the item's LUFS data
+        /// </summary>
+        Task ApplyVolumeNormalizationAsync(MediaPlayer player, BaseItemDto item, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets the current volume multiplier for an item without applying it
+        /// </summary>
+        Task<double?> GetVolumeMultiplierAsync(BaseItemDto item, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Clears the LUFS cache
+        /// </summary>
+        void ClearCache();
     }
 
     // Supporting classes

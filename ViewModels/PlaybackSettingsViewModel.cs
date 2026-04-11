@@ -44,6 +44,9 @@ namespace Gelatinarm.ViewModels
         private string _videoStretchMode = "Uniform";
         // Audio enhancement settings
         private bool _isNightModeEnabled = false;
+        private bool _enableVolumeNormalization = true;
+        private bool _useAlbumGain = false;
+        private double _lufsTarget = -16.0;
 
         public PlaybackSettingsViewModel(
             ILogger<PlaybackSettingsViewModel> logger,
@@ -208,9 +211,11 @@ namespace Gelatinarm.ViewModels
                 _allowAudioStreamCopy = appPrefs.AllowAudioStreamCopy;
                 _videoStretchMode = appPrefs.VideoStretchMode;
 
-                // Audio enhancement settings - these may not exist in AppPreferences yet
-                // so we'll use default values for now
-                _isNightModeEnabled = false;  // Default to false
+                // Audio enhancement settings - night mode is stored separately in MediaOptimizationService
+                _isNightModeEnabled = _mediaOptimizationService.GetNightModePreference();
+                _enableVolumeNormalization = appPrefs.EnableVolumeNormalization;
+                _useAlbumGain = appPrefs.UseAlbumGain;
+                _lufsTarget = appPrefs.LufsTarget;
 
                 // Notify all properties changed
                 OnPropertyChanged(nameof(AutoPlayNextEpisode));
@@ -221,6 +226,9 @@ namespace Gelatinarm.ViewModels
                 OnPropertyChanged(nameof(AllowAudioStreamCopy));
                 OnPropertyChanged(nameof(VideoStretchMode));
                 OnPropertyChanged(nameof(IsNightModeEnabled));
+                OnPropertyChanged(nameof(EnableVolumeNormalization));
+                OnPropertyChanged(nameof(UseAlbumGain));
+                OnPropertyChanged(nameof(LufsTarget));
             });
         }
 
@@ -248,6 +256,9 @@ namespace Gelatinarm.ViewModels
             AllowAudioStreamCopy = false;
             VideoStretchMode = "Uniform";
             IsNightModeEnabled = false;
+            EnableVolumeNormalization = true;
+            UseAlbumGain = false;
+            LufsTarget = -16.0;
 
             await Task.CompletedTask;
         }
@@ -427,6 +438,48 @@ namespace Gelatinarm.ViewModels
 
                     // Call MediaOptimizationService if it has night mode methods
                     _mediaOptimizationService?.SetNightMode(value);
+                }
+            }
+        }
+
+        public bool EnableVolumeNormalization
+        {
+            get => _enableVolumeNormalization;
+            set
+            {
+                if (SetSettingProperty(ref _enableVolumeNormalization, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.EnableVolumeNormalization = value,
+                            nameof(EnableVolumeNormalization)));
+                }
+            }
+        }
+
+        public bool UseAlbumGain
+        {
+            get => _useAlbumGain;
+            set
+            {
+                if (SetSettingProperty(ref _useAlbumGain, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.UseAlbumGain = value,
+                            nameof(UseAlbumGain)));
+                }
+            }
+        }
+
+        public double LufsTarget
+        {
+            get => _lufsTarget;
+            set
+            {
+                if (SetSettingProperty(ref _lufsTarget, Math.Clamp(value, -30.0, -10.0)))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.LufsTarget = _lufsTarget,
+                            nameof(LufsTarget)));
                 }
             }
         }
