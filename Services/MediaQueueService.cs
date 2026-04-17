@@ -179,40 +179,38 @@ namespace Gelatinarm.Services
 
         public void RemoveFromQueue(int index)
         {
-            var context = CreateErrorContext("RemoveFromQueue", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                if (index < 0 || index >= Queue.Count || index == CurrentQueueIndex)
                 {
-                    if (index < 0 || index >= Queue.Count || index == CurrentQueueIndex)
-                    {
-                        return;
-                    }
-
-                    Queue.RemoveAt(index);
-                    _lastQueueHash = 0;
-
-                    // Adjust current index if the removed item was before it
-                    if (index < CurrentQueueIndex)
-                    {
-                        CurrentQueueIndex--;
-                        QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
-                    }
-
-                    // Rebuild shuffle indices if in shuffle mode
-                    if (IsShuffleMode)
-                    {
-                        CreateShuffledIndices();
-                    }
-
-                    QueueChanged?.Invoke(this, Queue);
-                    await Task.CompletedTask;
+                    return;
                 }
-                catch (Exception ex)
+
+                Queue.RemoveAt(index);
+                _lastQueueHash = 0;
+
+                // Adjust current index if the removed item was before it
+                if (index < CurrentQueueIndex)
                 {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                    CurrentQueueIndex--;
+                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
                 }
-            });
+
+                // Rebuild shuffle indices if in shuffle mode
+                if (IsShuffleMode)
+                {
+                    CreateShuffledIndices();
+                }
+
+                QueueChanged?.Invoke(this, Queue);
+            }
+            catch (Exception ex)
+            {
+                var context = CreateErrorContext("RemoveFromQueue", ErrorCategory.Media);
+                AsyncHelper.FireAndForget(async () =>
+                    await ErrorHandler.HandleErrorAsync(ex, context, false),
+                    Logger, typeof(MediaQueueService));
+            }
         }
 
         public void SetCurrentIndex(int index)

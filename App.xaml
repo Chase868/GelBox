@@ -146,7 +146,7 @@
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Height" Value="36" />
                 <Setter Property="CornerRadius" Value="{StaticResource SmallCornerRadius}" />
-                <Setter Property="Padding" Value="16,0" />
+                <Setter Property="Padding" Value="8,0" />
             </Style>
 
             <!-- Media Transport Button Style - Matches system transport controls transparency -->

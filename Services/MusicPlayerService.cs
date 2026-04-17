@@ -45,6 +45,7 @@ namespace Gelatinarm.Services
         private bool _isSmtcInitialized = false;
         private bool _isSubscribedToEvents = false;
         private readonly List<BaseItemDto> _playedHistory = new List<BaseItemDto>();
+        private BaseItemDto _lastKnownPlayingItem;
         private const int MAX_HISTORY_SIZE = 50;
 
         public MusicPlayerService(
@@ -602,19 +603,20 @@ namespace Gelatinarm.Services
         private void OnNowPlayingChanged(object sender, BaseItemDto item)
         {
             // Track the previously playing item in history before switching
-            if (_mediaControlService.CurrentItem != null && _mediaControlService.CurrentItem != item)
+            if (_lastKnownPlayingItem != null && _lastKnownPlayingItem.Id != item?.Id)
             {
-                var prev = _mediaControlService.CurrentItem;
                 // Avoid duplicates at the end of the list
-                if (_playedHistory.Count == 0 || _playedHistory[_playedHistory.Count - 1]?.Id != prev.Id)
+                if (_playedHistory.Count == 0 || _playedHistory[_playedHistory.Count - 1]?.Id != _lastKnownPlayingItem.Id)
                 {
-                    _playedHistory.Add(prev);
+                    _playedHistory.Add(_lastKnownPlayingItem);
                     if (_playedHistory.Count > MAX_HISTORY_SIZE)
                     {
                         _playedHistory.RemoveAt(0);
                     }
                 }
             }
+
+            _lastKnownPlayingItem = item;
 
             NowPlayingChanged?.Invoke(this, item);
 
