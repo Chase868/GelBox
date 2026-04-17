@@ -9,7 +9,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:Gelatinarm.Controls"
     mc:Ignorable="d"
-    Background="{StaticResource SystemChromeMediumBrush}">
+    Background="{StaticResource ApplicationPageBackgroundThemeBrush}">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -19,9 +19,9 @@
 
         <!-- Fixed Header with Search and Filters -->
         <Grid Grid.Row="0"
-              Background="{StaticResource SystemChromeMediumBrush}"
-              BorderBrush="{StaticResource SystemBaseLowBrush}"
-              BorderThickness="0,0,0,1">
+              BorderBrush="{StaticResource DividerBrush}"
+              BorderThickness="0,0,0,1"
+              Padding="0,8,0,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

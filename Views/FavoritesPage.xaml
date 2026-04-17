@@ -19,8 +19,7 @@
 
         <!-- Fixed Header with Title and Filters -->
         <Grid Grid.Row="0"
-              Background="{StaticResource SystemChromeMediumLowColor}"
-              BorderBrush="{StaticResource SystemBaseLowBrush}"
+              BorderBrush="{StaticResource DividerBrush}"
               BorderThickness="0,0,0,1">
             <Grid Margin="{StaticResource SafeAreaPadding}">
                 <Grid.ColumnDefinitions>
@@ -31,8 +30,7 @@
                 <!-- Title -->
                 <TextBlock Grid.Column="0"
                            Text="Favorites"
-                           FontSize="24"
-                           FontWeight="SemiBold"
+                           Style="{StaticResource TitleTextStyle}"
                            VerticalAlignment="Center" />
 
                 <!-- Filter Buttons -->

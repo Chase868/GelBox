@@ -29,7 +29,15 @@
                HorizontalAlignment="Stretch" />
 
         <!-- Dark overlay for better text readability -->
-        <Grid Background="#DD000000" />
+        <Border>
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#B3000000" Offset="0" />
+                    <GradientStop Color="#E6000000" Offset="0.4" />
+                    <GradientStop Color="#F2000000" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
 
         <!-- Scrollable Content -->
         <ListView x:Name="ContentScrollViewer"

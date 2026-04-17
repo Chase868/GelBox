@@ -34,7 +34,15 @@
                    HorizontalAlignment="Stretch" />
 
             <!-- Dark overlay for better text readability -->
-            <Grid Background="#DD000000" />
+            <Border>
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#B3000000" Offset="0" />
+                        <GradientStop Color="#E6000000" Offset="0.4" />
+                        <GradientStop Color="#F2000000" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.Background>
+            </Border>
 
             <!-- Content Presenter for page-specific content -->
             <ContentPresenter />
@@ -83,9 +91,10 @@
               Margin="{StaticResource StandardControlMargin}"
               MaxWidth="500"
               Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibility}}">
-            <Rectangle Fill="#33FFFFFF" />
+            <Rectangle Fill="#20FFFFFF" RadiusX="2" RadiusY="2" />
             <Rectangle HorizontalAlignment="Left"
                        Fill="{StaticResource AppAccentBrush}"
+                       RadiusX="2" RadiusY="2"
                        Width="{Binding ProgressWidth}" />
         </Grid>
     </DataTemplate>
@@ -235,7 +244,7 @@
             </Grid.RowDefinitions>
 
             <!-- Poster Image -->
-            <Border Grid.Row="0" Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}">
+            <Border Grid.Row="0" Background="{StaticResource CardBackgroundBrush}" CornerRadius="6">
                 <Image Source="{Binding Converter={StaticResource ImageConverter}}"
                        Stretch="UniformToFill" />
             </Border>

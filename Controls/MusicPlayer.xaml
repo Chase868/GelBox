@@ -11,14 +11,16 @@
     mc:Ignorable="d"
     d:DesignHeight="80"
     d:DesignWidth="800"
-    Height="80">
+    Height="84">
     <Grid>
         <!-- Main MusicPlayer Content -->
-        <Grid Background="{StaticResource SystemChromeMediumLowBrush}"
-              AllowFocusOnInteraction="False"
+        <Grid AllowFocusOnInteraction="False"
               XYFocusKeyboardNavigation="Enabled">
+            <Grid.Background>
+                <SolidColorBrush Color="#181818" />
+            </Grid.Background>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="84" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="96" />
@@ -28,7 +30,8 @@
             <Border Grid.Column="0"
                     Width="64"
                     Height="64"
-                    Margin="8">
+                    Margin="10"
+                    CornerRadius="{StaticResource SmallCornerRadius}">
                 <Image x:Name="AlbumArt"
                        Stretch="UniformToFill" />
             </Border>
@@ -67,10 +70,15 @@
                     <!-- Progress Bar -->
                     <Grid Grid.Column="1"
                           VerticalAlignment="Center">
-                        <Rectangle Height="2"
-                                   Fill="{StaticResource SystemControlBackgroundBaseMediumLowBrush}" />
+                        <Rectangle Height="3"
+                                   RadiusX="1.5"
+                                   RadiusY="1.5"
+                                   Fill="{StaticResource SystemControlBackgroundBaseMediumLowBrush}"
+                                   Opacity="0.4" />
                         <Rectangle x:Name="ProgressBar"
-                                   Height="2"
+                                   Height="3"
+                                   RadiusX="1.5"
+                                   RadiusY="1.5"
                                    HorizontalAlignment="Left"
                                    Fill="{StaticResource SystemControlHighlightAccentBrush}" />
                     </Grid>

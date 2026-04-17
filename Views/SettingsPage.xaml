@@ -20,20 +20,24 @@
 
         <!-- Header -->
         <Grid Grid.Row="0"
-              Background="{StaticResource SystemChromeLowBrush}"
-              Height="60">
+              Height="64">
             <TextBlock Text="Settings"
                        Style="{StaticResource TitleTextStyle}"
-                       Margin="{StaticResource ContentMargin}"
+                       Margin="48,0,48,0"
                        VerticalAlignment="Center" />
         </Grid>
 
         <ScrollViewer Grid.Row="1" Padding="{StaticResource SafeAreaPadding}">
-            <StackPanel Style="{StaticResource StandardPageContainerStyle}">
+            <StackPanel Style="{StaticResource StandardPageContainerStyle}"
+                        MaxWidth="720">
 
                 <!-- Server Settings -->
-                <StackPanel x:Name="ServerSettings" Margin="{StaticResource SectionMargin}">
-                    <TextBlock Text="Server" Style="{StaticResource SectionHeaderTextStyle}" />
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="ServerSettings">
+                        <TextBlock Text="Server" Style="{StaticResource SectionHeaderTextStyle}" />
 
                     <Button Content="Sign Out"
                             Command="{x:Bind TypedViewModel.ServerSettings.SignOutCommand}"
@@ -59,11 +63,15 @@
                                    TextWrapping="Wrap"
                                    FontSize="12" />
                     </StackPanel>
-                </StackPanel>
+                </Border>
 
                 <!-- Accessibility Settings -->
-                <StackPanel x:Name="AccessibilitySettings" Margin="{StaticResource SectionMargin}">
-                    <TextBlock Text="Accessibility" Style="{StaticResource SectionHeaderTextStyle}" />
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="AccessibilitySettings">
+                        <TextBlock Text="Accessibility" Style="{StaticResource SectionHeaderTextStyle}" />
                     <StackPanel>
                         <TextBlock>
                             <Run Text="Text Size: " />
@@ -76,11 +84,15 @@
                                 Style="{StaticResource StandardSliderStyle}" />
                     </StackPanel>
 
-                </StackPanel>
+                </Border>
 
                 <!-- Audio Settings -->
-                <StackPanel x:Name="AudioSettings" Margin="{StaticResource SectionMargin}">
-                    <TextBlock Text="Audio" Style="{StaticResource SectionHeaderTextStyle}" />
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="AudioSettings">
+                        <TextBlock Text="Audio" Style="{StaticResource SectionHeaderTextStyle}" />
 
                     <ToggleSwitch Header="Night Mode"
                                   IsOn="{x:Bind TypedViewModel.PlaybackSettings.IsNightModeEnabled, Mode=TwoWay}"
@@ -92,11 +104,15 @@
                         Margin="0,0,0,12"
                         TextWrapping="Wrap"
                         FontSize="12" />
-                </StackPanel>
+                </Border>
 
                 <!-- Video Settings -->
-                <StackPanel x:Name="VideoSettings" Margin="{StaticResource SectionMargin}">
-                    <TextBlock Text="Video" Style="{StaticResource SectionHeaderTextStyle}" />
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="VideoSettings">
+                        <TextBlock Text="Video" Style="{StaticResource SectionHeaderTextStyle}" />
 
                     <ComboBox Header="Display Mode"
                               x:Name="VideoStretchModeComboBox"
@@ -113,11 +129,15 @@
                         Margin="0,0,0,12"
                         TextWrapping="Wrap"
                         FontSize="12" />
-                </StackPanel>
+                </Border>
 
                 <!-- Playback Settings -->
-                <StackPanel x:Name="PlaybackSettings" Margin="{StaticResource SectionMargin}">
-                    <TextBlock Text="Playback" Style="{StaticResource SectionHeaderTextStyle}" />
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="PlaybackSettings">
+                        <TextBlock Text="Playback" Style="{StaticResource SectionHeaderTextStyle}" />
 
 
                     <ToggleSwitch Header="Auto-Play Next Episode"
@@ -246,7 +266,7 @@
                         FontSize="12" />
 
 
-                </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

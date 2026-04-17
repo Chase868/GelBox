@@ -14,78 +14,91 @@
         <!-- Main content -->
         <StackPanel HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    MaxWidth="400">
+                    MaxWidth="420">
 
             <!-- Header -->
-            <Image Source="ms-appx:///Assets/StoreLogo.png" Width="150" Height="150" />
+            <Image Source="ms-appx:///Assets/StoreLogo.png" Width="120" Height="120"
+                   Margin="0,0,0,16" />
             <TextBlock Text="Welcome"
-                       Style="{StaticResource HeaderTextStyle}"
+                       Style="{StaticResource TitleTextStyle}"
                        HorizontalAlignment="Center"
-                       Margin="{StaticResource CompactControlMargin}"
-                       Foreground="White" />
+                       Margin="0,0,0,6" />
             <TextBlock Text="Connect to your Jellyfin server to get started"
-                       Style="{StaticResource SubheaderTextStyle}"
+                       Style="{StaticResource StandardBodyTextStyle}"
                        HorizontalAlignment="Center"
-                       Margin="{StaticResource HeaderMargin}"
-                       Foreground="#CCFFFFFF" />
+                       Margin="0,0,0,28"
+                       Foreground="#B3FFFFFF"
+                       TextAlignment="Center" />
 
-            <!-- InputScope, IsSpellCheckEnabled, IsTextPredictionEnabled removed for Xbox compatibility -->
-            <!-- AcceptsReturn removed for Xbox compatibility -->
-            <StackPanel Width="320">
-                <!-- <TextBlock Text="Server URL"
-                          FontSize="15"
-                          Margin="{StaticResource StandardControlMargin}"
-                          Foreground="White"/> -->
-                <TextBox x:Name="ServerUrlTextBox"
-                         Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}"
-                         PlaceholderText="http://server:8096"
-                         Margin="{StaticResource HeaderMargin}"
-                         IsTabStop="True"
-                         TabIndex="1"
-                         InputScope="Url"
-                         Foreground="White"
-                         Background="#2A2A2A"
-                         BorderBrush="#555555"
-                         PlaceholderForeground="#999999" />
-            </StackPanel>
+            <!-- Server URL Card -->
+            <Border Background="{StaticResource CardBackgroundBrush}"
+                    CornerRadius="{StaticResource LargeCornerRadius}"
+                    Padding="24,20"
+                    Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="Server URL"
+                               FontSize="13"
+                               Foreground="#80FFFFFF"
+                               Margin="0,0,0,8" />
+                    <TextBox x:Name="ServerUrlTextBox"
+                             Text="{x:Bind ViewModel.ServerUrl, Mode=TwoWay}"
+                             PlaceholderText="http://server:8096"
+                             IsTabStop="True"
+                             TabIndex="1"
+                             InputScope="Url"
+                             Foreground="White"
+                             Background="#222222"
+                             BorderBrush="#333333"
+                             CornerRadius="{StaticResource SmallCornerRadius}"
+                             PlaceholderForeground="#666666"
+                             Padding="12,10" />
 
-            <!-- SSL Certificate Options -->
-            <StackPanel HorizontalAlignment="Center">
-                <TextBlock Text="Allow Untrusted Certificates (Ignores Errors)"
-                           FontSize="15"
-                           Margin="{StaticResource StandardControlMargin}"
-                           Foreground="White" />
-                <ToggleSwitch IsOn="{x:Bind ViewModel.AllowUntrustedCertificates, Mode=TwoWay}"
-                              IsTabStop="True"
-                              TabIndex="2"
-                              Margin="{StaticResource CompactControlMargin}" />
-            </StackPanel>
+                    <!-- SSL Certificate Options -->
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Allow Untrusted Certificates"
+                                   FontSize="14"
+                                   Foreground="#B3FFFFFF"
+                                   VerticalAlignment="Center" />
+                        <ToggleSwitch Grid.Column="1"
+                                      IsOn="{x:Bind ViewModel.AllowUntrustedCertificates, Mode=TwoWay}"
+                                      IsTabStop="True"
+                                      TabIndex="2"
+                                      MinWidth="0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
 
             <Button Content="Connect"
                     Command="{x:Bind ViewModel.ConnectCommand}"
-                    Style="{StaticResource AccentButtonStyle}"
+                    Style="{StaticResource PrimaryButtonStyle}"
                     HorizontalAlignment="Stretch"
-                    MinHeight="40"
-                    Margin="{StaticResource StandardControlMargin}"
+                    Height="48"
+                    FontSize="16"
+                    FontWeight="SemiBold"
+                    CornerRadius="{StaticResource MediumCornerRadius}"
+                    Margin="0,4,0,0"
                     IsTabStop="True"
                     TabIndex="3" />
 
         </StackPanel>
 
         <!-- Loading overlay -->
-        <Grid Background="#80000000"
-              Visibility="{x:Bind ViewModel.IsLoadingOverlayVisible, Mode=OneWay}"
-              Opacity="0.9">
+        <Grid Background="#E6080808"
+              Visibility="{x:Bind ViewModel.IsLoadingOverlayVisible, Mode=OneWay}">
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center">
                 <ProgressRing IsActive="{x:Bind ViewModel.IsLoadingRingActive, Mode=OneWay}"
-                              Width="60"
-                              Height="60" />
+                              Width="48"
+                              Height="48" />
                 <TextBlock Text="{x:Bind ViewModel.LoadingText, Mode=OneWay}"
-                           Style="{StaticResource SubheaderTextStyle}"
+                           Style="{StaticResource StandardBodyTextStyle}"
                            HorizontalAlignment="Center"
-                           Margin="{StaticResource HeaderMargin}"
-                           Foreground="White" />
+                           Margin="0,12,0,0"
+                           Foreground="#B3FFFFFF" />
             </StackPanel>
         </Grid>
     </Grid>

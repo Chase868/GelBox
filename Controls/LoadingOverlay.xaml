@@ -8,7 +8,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Background="#DD000000"
+    <Grid Background="#E6080808"
           Visibility="{x:Bind IsLoading, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
           IsHitTestVisible="True"
           Canvas.ZIndex="1000">
@@ -31,16 +31,16 @@
 
         <ProgressRing Grid.Row="1"
                       IsActive="{x:Bind IsLoading, Mode=OneWay}"
-                      Width="60"
-                      Height="60"
+                      Width="48"
+                      Height="48"
                       Foreground="{StaticResource SystemControlHighlightAccentBrush}" />
 
         <TextBlock Grid.Row="2"
                    Text="{x:Bind LoadingText, Mode=OneWay}"
                    HorizontalAlignment="Center"
-                   Margin="0,16,0,0"
-                   FontSize="16"
-                   Foreground="White"
+                   Margin="0,14,0,0"
+                   FontSize="14"
+                   Foreground="#B3FFFFFF"
                    Visibility="{x:Bind LoadingText, Mode=OneWay, Converter={StaticResource NullableToVisibilityConverter}}" />
     </Grid>
 </UserControl>

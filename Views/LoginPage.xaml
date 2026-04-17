@@ -11,81 +11,97 @@
     Background="{StaticResource ApplicationPageBackgroundThemeBrush}">
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="{StaticResource DialogMargin}">
-            <TextBlock Text="Sign In"
-                       Style="{StaticResource TitleTextStyle}"
-                       HorizontalAlignment="Center" />
-        </StackPanel>
-
         <!-- Login Form -->
-        <ScrollViewer Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto"
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Width="500"
-                        Margin="{StaticResource SectionMargin}">
+                        MaxWidth="420"
+                        Margin="0,48,0,48">
 
-                <StackPanel Width="350">
-                    <TextBlock Text="Username"
-                               FontSize="15"
-                               Margin="{StaticResource StandardControlMargin}"
-                               Foreground="{StaticResource SystemControlForegroundBaseMediumBrush}" />
-                    <TextBox x:Name="UsernameTextBox"
-                             Text="{x:Bind ViewModel.Username, Mode=TwoWay}"
-                             TabIndex="1" />
-                </StackPanel>
-
-                <StackPanel Width="350" Margin="{StaticResource StandardControlMargin}">
-                    <TextBlock Text="Password"
-                               FontSize="15"
-                               Margin="{StaticResource StandardControlMargin}"
-                               Foreground="{StaticResource SystemControlForegroundBaseMediumBrush}" />
-                    <PasswordBox x:Name="PasswordBox"
-                                 Password="{x:Bind ViewModel.Password, Mode=TwoWay}"
-                                 TabIndex="2" />
-                </StackPanel>
-
-                <Button Content="Sign In"
-                        Command="{x:Bind ViewModel.LoginCommand}"
-                        Style="{StaticResource PrimaryButtonStyle}"
-                        HorizontalAlignment="Stretch"
-                        Width="350"
-                        Height="48"
-                        FontSize="16"
-                        TabIndex="3" />
-
-                <TextBlock Text="- OR -"
+                <!-- Header -->
+                <TextBlock Text="Sign In"
+                           Style="{StaticResource TitleTextStyle}"
                            HorizontalAlignment="Center"
-                           Foreground="Gray"
-                           Margin="{StaticResource StandardControlMargin}"
-                           Style="{StaticResource StandardCaptionTextStyle}" />
+                           Margin="0,0,0,32" />
 
-                <Button Content="Quick Connect"
-                        Command="{x:Bind ViewModel.QuickConnectCommand}"
-                        IsEnabled="{x:Bind ViewModel.IsQuickConnectEnabled, Mode=OneWay}"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        HorizontalAlignment="Stretch"
-                        Width="350"
-                        Height="48"
-                        FontSize="16"
-                        TabIndex="4" />
+                <!-- Login Card -->
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource LargeCornerRadius}"
+                        Padding="28,24">
+                    <StackPanel>
+                        <TextBlock Text="Username"
+                                   FontSize="13"
+                                   Foreground="#80FFFFFF"
+                                   Margin="0,0,0,6" />
+                        <TextBox x:Name="UsernameTextBox"
+                                 Text="{x:Bind ViewModel.Username, Mode=TwoWay}"
+                                 Background="#222222"
+                                 BorderBrush="#333333"
+                                 CornerRadius="{StaticResource SmallCornerRadius}"
+                                 Padding="12,10"
+                                 TabIndex="1" />
+
+                        <TextBlock Text="Password"
+                                   FontSize="13"
+                                   Foreground="#80FFFFFF"
+                                   Margin="0,18,0,6" />
+                        <PasswordBox x:Name="PasswordBox"
+                                     Password="{x:Bind ViewModel.Password, Mode=TwoWay}"
+                                     Background="#222222"
+                                     BorderBrush="#333333"
+                                     CornerRadius="{StaticResource SmallCornerRadius}"
+                                     Padding="12,10"
+                                     TabIndex="2" />
+
+                        <Button Content="Sign In"
+                                Command="{x:Bind ViewModel.LoginCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Height="48"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                CornerRadius="{StaticResource MediumCornerRadius}"
+                                Margin="0,24,0,0"
+                                TabIndex="3" />
+
+                        <!-- Divider -->
+                        <Grid Margin="0,20,0,20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="0" Height="1" Fill="#20FFFFFF" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="OR" Foreground="#50FFFFFF" FontSize="12"
+                                       Margin="12,0" />
+                            <Rectangle Grid.Column="2" Height="1" Fill="#20FFFFFF" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Button Content="Quick Connect"
+                                Command="{x:Bind ViewModel.QuickConnectCommand}"
+                                IsEnabled="{x:Bind ViewModel.IsQuickConnectEnabled, Mode=OneWay}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Height="48"
+                                FontSize="15"
+                                CornerRadius="{StaticResource MediumCornerRadius}"
+                                TabIndex="4" />
+                    </StackPanel>
+                </Border>
 
                 <ProgressRing IsActive="{x:Bind ViewModel.IsLoadingRingActive, Mode=OneWay}"
-                              Width="64"
-                              Height="64" />
+                              Width="48"
+                              Height="48"
+                              Margin="0,20,0,0" />
 
                 <TextBlock Text="{x:Bind ViewModel.ErrorText, Mode=OneWay}"
-                           Foreground="Red"
+                           Foreground="#FF6B6B"
                            TextWrapping="Wrap"
                            HorizontalAlignment="Center"
+                           TextAlignment="Center"
                            Style="{StaticResource StandardCaptionTextStyle}"
+                           Margin="0,12,0,0"
                            Visibility="{x:Bind ViewModel.IsErrorVisible, Mode=OneWay}" />
             </StackPanel>
         </ScrollViewer>
