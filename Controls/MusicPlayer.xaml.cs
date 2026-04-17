@@ -1034,6 +1034,7 @@ namespace Gelatinarm.Controls
                     VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
                 };
                 removeBtn.Click += RemoveQueueItem_Click;
+                removeBtn.Tapped += (s, args) => args.Handled = true;
                 Grid.SetColumn(removeBtn, 1);
                 row.Children.Add(removeBtn);
             }
