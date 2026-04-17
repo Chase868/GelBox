@@ -127,6 +127,15 @@ namespace Gelatinarm.Services
                 _playbackParams.MediaSourceId = mediaSourceId;
             }
 
+            // Reset session flags when a new play session starts (e.g., new track in music queue)
+            if (_playSessionId != playSessionId)
+            {
+                _hasReportedStart = false;
+                _hasReportedStop = false;
+                _positionReportCounter = 0;
+                _activeProgressReportTask = null;
+            }
+
             // Delegate to the session-aware method
             await ReportPlaybackStartAsync(playSessionId, positionTicks);
         }
@@ -143,8 +152,11 @@ namespace Gelatinarm.Services
                 _playbackParams.MediaSourceId = mediaSourceId;
             }
 
-            // Delegate to the session-aware method
-            await ReportPlaybackProgressAsync(playSessionId, positionTicks, isPaused);
+            // Delegate directly to the API call, bypassing the counter-based throttle
+            // in the session-aware method. The music player already throttles via its own
+            // 10-second timer, so the additional counter-based throttle would cause reports
+            // to only go through every ~200 seconds instead of every 10 seconds.
+            await ReportPlaybackProgressDirectAsync(playSessionId, positionTicks, isPaused);
         }
 
         // IMediaPlaybackService interface method with different signature
@@ -563,94 +575,128 @@ namespace Gelatinarm.Services
                     return;
                 }
 
-                // Throttle progress reports
+                // Throttle progress reports (used by video player path which calls very frequently)
                 _positionReportCounter++;
                 if (_positionReportCounter % MediaPlayerConstants.POSITION_REPORT_INTERVAL_TICKS != 0)
                 {
                     return;
                 }
 
-                var progressInfo = new PlaybackProgressInfo
-                {
-                    ItemId = _currentItem.Id.Value,
-                    MediaSourceId = _playbackParams?.MediaSourceId,
-                    PositionTicks = positionTicks,
-                    PlaySessionId = playSessionId,
-                    IsPaused = isPaused,
-                    PlayMethod = DeterminePlayMethod()
-                };
-
-                Logger.LogDebug(
-                    $"[PLAYBACK-PROGRESS] ItemId={_currentItem.Id.Value}, Session={playSessionId}, " +
-                    $"PositionTicks={positionTicks}, IsPaused={isPaused}");
-
-                // Check if a previous progress report is still running
-                if (_activeProgressReportTask != null && !_activeProgressReportTask.IsCompleted)
-                {
-                    Logger.LogDebug("Previous progress report still in progress, skipping this interval");
-                    return;
-                }
-
-                // Store and execute the progress report task on background thread
-                _activeProgressReportTask = Task.Run(async () =>
-                {
-                    try
-                    {
-                        // Create a timeout using Task.Delay
-                        using var cts = new CancellationTokenSource();
-                        var progressTask = _apiClient.Sessions.Playing.Progress.PostAsync(progressInfo);
-                        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(MediaPlayerConstants.API_CALL_TIMEOUT_SECONDS), cts.Token);
-
-                        // Wait for either completion or timeout
-                        var completedTask = await Task.WhenAny(progressTask, timeoutTask).ConfigureAwait(false);
-
-                        if (completedTask == timeoutTask)
-                        {
-                            // Timeout occurred - but keep waiting for the actual request to complete
-                            // This prevents starting new requests while the old one is still running
-                            Logger.LogDebug("Progress report timed out - waiting for completion to avoid overlapping requests");
-
-                            // Continue waiting for the actual progress task to complete (no additional timeout)
-                            // This ensures we don't start a new request while this one is still pending
-                            try
-                            {
-                                await progressTask.ConfigureAwait(false);
-                                Logger.LogDebug("Timed-out progress report eventually completed");
-                            }
-                            catch
-                            {
-                                // Ignore errors from timed-out request
-                                Logger.LogDebug("Timed-out progress report eventually failed");
-                            }
-                            return;
-                        }
-
-                        // Cancel the timeout since we completed
-                        cts.Cancel();
-
-                        // Await the progress task to get any exceptions
-                        await progressTask.ConfigureAwait(false);
-
-                        var position = TimeSpan.FromTicks(positionTicks);
-                        Logger.LogDebug(
-                            $"Reported playback progress at {position:hh\\:mm\\:ss} for {_currentItem.Name}");
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        Logger.LogDebug("Progress report cancelled");
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log other exceptions but don't let them break progress reporting
-                        Logger.LogDebug(ex, "Failed to report progress - will retry on next interval");
-                    }
-                });
+                await SendProgressReportAsync(playSessionId, positionTicks, isPaused);
             }
             catch (Exception ex)
             {
                 Logger.LogDebug(ex, "Failed to report playback progress");
                 // Don't throw - this is not critical
             }
+        }
+
+        /// <summary>
+        ///     Reports playback progress directly without counter-based throttling.
+        ///     Used by the music player path which already throttles via its own timer.
+        /// </summary>
+        private async Task ReportPlaybackProgressDirectAsync(string playSessionId, long positionTicks, bool isPaused)
+        {
+            try
+            {
+                if (!_hasReportedStart || string.IsNullOrEmpty(playSessionId))
+                {
+                    Logger.LogDebug("Cannot report progress - playback not started or missing session ID");
+                    return;
+                }
+
+                if (_currentItem == null || !_currentItem.Id.HasValue)
+                {
+                    Logger.LogDebug("Cannot report progress - current item is null or has no ID");
+                    return;
+                }
+
+                await SendProgressReportAsync(playSessionId, positionTicks, isPaused);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to report playback progress");
+                // Don't throw - this is not critical
+            }
+        }
+
+        private async Task SendProgressReportAsync(string playSessionId, long positionTicks, bool isPaused)
+        {
+            var progressInfo = new PlaybackProgressInfo
+            {
+                ItemId = _currentItem.Id.Value,
+                MediaSourceId = _playbackParams?.MediaSourceId,
+                PositionTicks = positionTicks,
+                PlaySessionId = playSessionId,
+                IsPaused = isPaused,
+                PlayMethod = DeterminePlayMethod()
+            };
+
+            Logger.LogDebug(
+                $"[PLAYBACK-PROGRESS] ItemId={_currentItem.Id.Value}, Session={playSessionId}, " +
+                $"PositionTicks={positionTicks}, IsPaused={isPaused}");
+
+            // Check if a previous progress report is still running
+            if (_activeProgressReportTask != null && !_activeProgressReportTask.IsCompleted)
+            {
+                Logger.LogDebug("Previous progress report still in progress, skipping this interval");
+                return;
+            }
+
+            // Store and execute the progress report task on background thread
+            _activeProgressReportTask = Task.Run(async () =>
+            {
+                try
+                {
+                    // Create a timeout using Task.Delay
+                    using var cts = new CancellationTokenSource();
+                    var progressTask = _apiClient.Sessions.Playing.Progress.PostAsync(progressInfo);
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(MediaPlayerConstants.API_CALL_TIMEOUT_SECONDS), cts.Token);
+
+                    // Wait for either completion or timeout
+                    var completedTask = await Task.WhenAny(progressTask, timeoutTask).ConfigureAwait(false);
+
+                    if (completedTask == timeoutTask)
+                    {
+                        // Timeout occurred - but keep waiting for the actual request to complete
+                        // This prevents starting new requests while the old one is still running
+                        Logger.LogDebug("Progress report timed out - waiting for completion to avoid overlapping requests");
+
+                        // Continue waiting for the actual progress task to complete (no additional timeout)
+                        // This ensures we don't start a new request while this one is still pending
+                        try
+                        {
+                            await progressTask.ConfigureAwait(false);
+                            Logger.LogDebug("Timed-out progress report eventually completed");
+                        }
+                        catch
+                        {
+                            // Ignore errors from timed-out request
+                            Logger.LogDebug("Timed-out progress report eventually failed");
+                        }
+                        return;
+                    }
+
+                    // Cancel the timeout since we completed
+                    cts.Cancel();
+
+                    // Await the progress task to get any exceptions
+                    await progressTask.ConfigureAwait(false);
+
+                    var position = TimeSpan.FromTicks(positionTicks);
+                    Logger.LogDebug(
+                        $"Reported playback progress at {position:hh\\:mm\\:ss} for {_currentItem.Name}");
+                }
+                catch (OperationCanceledException)
+                {
+                    Logger.LogDebug("Progress report cancelled");
+                }
+                catch (Exception ex)
+                {
+                    // Log other exceptions but don't let them break progress reporting
+                    Logger.LogDebug(ex, "Failed to report progress - will retry on next interval");
+                }
+            });
         }
 
         // Session-aware method from IMediaSessionService
