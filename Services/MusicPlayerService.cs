@@ -44,6 +44,8 @@ namespace Gelatinarm.Services
         private Timer _progressReportTimer;
         private bool _isSmtcInitialized = false;
         private bool _isSubscribedToEvents = false;
+        private readonly List<BaseItemDto> _playedHistory = new List<BaseItemDto>();
+        private const int MAX_HISTORY_SIZE = 50;
 
         public MusicPlayerService(
             ILogger<MusicPlayerService> logger,
@@ -85,6 +87,7 @@ namespace Gelatinarm.Services
         public bool IsShuffleMode => _queueService.IsShuffleMode;
         public bool IsShuffleEnabled => _queueService.IsShuffleMode;
         public RepeatMode RepeatMode => _mediaControlService.RepeatMode;
+        public List<BaseItemDto> PlayedHistory => _playedHistory;
 
         public event EventHandler<BaseItemDto> NowPlayingChanged;
         public event EventHandler<MediaPlaybackState> PlaybackStateChanged;
@@ -158,6 +161,22 @@ namespace Gelatinarm.Services
         public void ClearQueue()
         {
             _queueService.ClearQueue();
+        }
+
+        public void RemoveFromQueue(int index)
+        {
+            _queueService.RemoveFromQueue(index);
+        }
+
+        public void PlayQueueItemAt(int index)
+        {
+            if (index < 0 || index >= _queueService.Queue.Count)
+            {
+                return;
+            }
+
+            _queueService.SetCurrentIndex(index);
+            FireAndForget(() => PlayItem(_queueService.Queue[index]), "PlayQueueItemAt");
         }
 
         public void Stop()
@@ -582,6 +601,21 @@ namespace Gelatinarm.Services
 
         private void OnNowPlayingChanged(object sender, BaseItemDto item)
         {
+            // Track the previously playing item in history before switching
+            if (_mediaControlService.CurrentItem != null && _mediaControlService.CurrentItem != item)
+            {
+                var prev = _mediaControlService.CurrentItem;
+                // Avoid duplicates at the end of the list
+                if (_playedHistory.Count == 0 || _playedHistory[_playedHistory.Count - 1]?.Id != prev.Id)
+                {
+                    _playedHistory.Add(prev);
+                    if (_playedHistory.Count > MAX_HISTORY_SIZE)
+                    {
+                        _playedHistory.RemoveAt(0);
+                    }
+                }
+            }
+
             NowPlayingChanged?.Invoke(this, item);
 
             if (item != null && IsAudioItem(item))

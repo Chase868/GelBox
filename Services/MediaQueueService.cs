@@ -177,6 +177,44 @@ namespace Gelatinarm.Services
             });
         }
 
+        public void RemoveFromQueue(int index)
+        {
+            var context = CreateErrorContext("RemoveFromQueue", ErrorCategory.Media);
+            FireAndForget(async () =>
+            {
+                try
+                {
+                    if (index < 0 || index >= Queue.Count || index == CurrentQueueIndex)
+                    {
+                        return;
+                    }
+
+                    Queue.RemoveAt(index);
+                    _lastQueueHash = 0;
+
+                    // Adjust current index if the removed item was before it
+                    if (index < CurrentQueueIndex)
+                    {
+                        CurrentQueueIndex--;
+                        QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+                    }
+
+                    // Rebuild shuffle indices if in shuffle mode
+                    if (IsShuffleMode)
+                    {
+                        CreateShuffledIndices();
+                    }
+
+                    QueueChanged?.Invoke(this, Queue);
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
         public void SetCurrentIndex(int index)
         {
             var context = CreateErrorContext("SetCurrentIndex", ErrorCategory.Media);

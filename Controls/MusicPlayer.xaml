@@ -13,8 +13,97 @@
     d:DesignWidth="800"
     Height="84">
     <Grid>
+        <!-- Queue Panel (expands above the player bar) -->
+        <Grid x:Name="QueuePanel"
+              Visibility="Collapsed"
+              VerticalAlignment="Top"
+              Margin="0,0,0,84">
+            <Border Background="#1A1A1A"
+                    BorderBrush="#20FFFFFF"
+                    BorderThickness="0,1,0,0"
+                    MaxHeight="420">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Queue Header -->
+                    <Grid Grid.Row="0" Padding="16,12,16,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Queue"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   VerticalAlignment="Center" />
+                        <Button x:Name="CloseQueueButton"
+                                Grid.Column="1"
+                                Width="32" Height="32"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="0"
+                                IsTabStop="True">
+                            <FontIcon Glyph="&#xE70D;" FontSize="12" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Queue Content -->
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="QueueContentPanel" Padding="8,0,8,8">
+
+                            <!-- Previously Played (Collapsible) -->
+                            <StackPanel x:Name="HistorySection" Visibility="Collapsed">
+                                <Button x:Name="HistoryToggleButton"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="0"
+                                        Padding="8,8"
+                                        IsTabStop="True">
+                                    <StackPanel Orientation="Horizontal">
+                                        <FontIcon x:Name="HistoryChevron" Glyph="&#xE76C;" FontSize="10"
+                                                  Foreground="#80FFFFFF" Margin="0,0,8,0"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock x:Name="HistoryHeaderText"
+                                                   Text="Previously Played"
+                                                   FontSize="13"
+                                                   Foreground="#80FFFFFF" />
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel x:Name="HistoryItemsPanel" Visibility="Collapsed" />
+                            </StackPanel>
+
+                            <!-- Now Playing Indicator -->
+                            <TextBlock x:Name="NowPlayingLabel"
+                                       Text="Now Playing"
+                                       FontSize="13"
+                                       Foreground="{StaticResource SystemControlHighlightAccentBrush}"
+                                       Margin="8,8,8,4" />
+
+                            <!-- Upcoming Queue -->
+                            <TextBlock x:Name="UpNextLabel"
+                                       Text="Up Next"
+                                       FontSize="13"
+                                       Foreground="#80FFFFFF"
+                                       Margin="8,12,8,4"
+                                       Visibility="Collapsed" />
+                            <StackPanel x:Name="UpcomingItemsPanel" />
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
         <!-- Main MusicPlayer Content -->
-        <Grid AllowFocusOnInteraction="False"
+        <Grid VerticalAlignment="Bottom"
+              AllowFocusOnInteraction="False"
               XYFocusKeyboardNavigation="Enabled">
             <Grid.Background>
                 <SolidColorBrush Color="#181818" />
@@ -239,15 +328,30 @@
             </StackPanel>
 
             <!-- Menu Button -->
-            <Button Grid.Column="3"
-                    x:Name="MenuButton"
-                    Width="40"
-                    Height="40"
-                    Margin="4"
-                    Background="Transparent"
-                    BorderBrush="Transparent"
-                    BorderThickness="0"
-                    IsTabStop="True">
+            <StackPanel Grid.Column="3"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <!-- Queue Toggle -->
+                <Button x:Name="QueueToggleButton"
+                        Width="40"
+                        Height="40"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="0"
+                        IsTabStop="True"
+                        Opacity="0.6">
+                    <FontIcon Glyph="&#xE8FD;" FontSize="16" />
+                </Button>
+
+                <!-- Menu -->
+                <Button x:Name="MenuButton"
+                        Width="40"
+                        Height="40"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                        BorderThickness="0"
+                        IsTabStop="True">
                 <FontIcon Glyph="&#xE712;" FontSize="16" />
                 <Button.Flyout>
                     <MenuFlyout x:Name="MenuFlyout" Placement="Top">
@@ -292,6 +396,7 @@
                     </MenuFlyout>
                 </Button.Flyout>
             </Button>
+            </StackPanel>
         </Grid>
     </Grid>
 </controls:BaseControl>

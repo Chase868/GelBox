@@ -270,6 +270,7 @@ namespace Gelatinarm.Services
         void SetQueue(List<BaseItemDto> items, int startIndex = 0);
         void AddToQueue(BaseItemDto item);
         void AddToQueueNext(BaseItemDto item);
+        void RemoveFromQueue(int index);
         void ClearQueue();
         void SetCurrentIndex(int index);
 
@@ -385,6 +386,7 @@ namespace Gelatinarm.Services
         void SetQueue(List<BaseItemDto> items, int startIndex = 0);
         void AddToQueue(BaseItemDto item);
         void AddToQueueNext(BaseItemDto item);
+        void RemoveFromQueue(int index);
         void ClearQueue();
         void Stop();
         void Play();
@@ -397,6 +399,8 @@ namespace Gelatinarm.Services
         void CycleRepeatMode();
         void ToggleShuffleMode();
         void SetShuffle(bool enabled);
+        void PlayQueueItemAt(int index);
+        List<BaseItemDto> PlayedHistory { get; }
         Task<bool> EnableBackgroundPlayback();
         Task<bool> DisableBackgroundPlayback();
 

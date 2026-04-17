@@ -26,6 +26,8 @@ namespace Gelatinarm.Controls
         private IUserProfileService _userProfileService;
         private IImageLoadingService _imageLoadingService;
         private DispatcherTimer _progressTimer;
+        private bool _isQueueOpen = false;
+        private bool _isHistoryExpanded = false;
 
         public MusicPlayer()
         {
@@ -82,6 +84,21 @@ namespace Gelatinarm.Controls
                 if (ShuffleButton != null)
                 {
                     ShuffleButton.Click += ShuffleButton_Click;
+                }
+
+                if (QueueToggleButton != null)
+                {
+                    QueueToggleButton.Click += QueueToggleButton_Click;
+                }
+
+                if (CloseQueueButton != null)
+                {
+                    CloseQueueButton.Click += CloseQueueButton_Click;
+                }
+
+                if (HistoryToggleButton != null)
+                {
+                    HistoryToggleButton.Click += HistoryToggleButton_Click;
                 }
 
                 // Subscribe to service events
@@ -178,6 +195,21 @@ namespace Gelatinarm.Controls
                     ShuffleButton.Click -= ShuffleButton_Click;
                 }
 
+                if (QueueToggleButton != null)
+                {
+                    QueueToggleButton.Click -= QueueToggleButton_Click;
+                }
+
+                if (CloseQueueButton != null)
+                {
+                    CloseQueueButton.Click -= CloseQueueButton_Click;
+                }
+
+                if (HistoryToggleButton != null)
+                {
+                    HistoryToggleButton.Click -= HistoryToggleButton_Click;
+                }
+
                 // Stop and dispose timers
                 if (_progressTimer != null)
                 {
@@ -233,6 +265,10 @@ namespace Gelatinarm.Controls
 #endif
                         UpdateNowPlayingInfo(item);
                         UpdateNavigationButtons();
+                        if (_isQueueOpen)
+                        {
+                            RebuildQueuePanel();
+                        }
 
                         // Re-subscribe to MediaPlayer in case it changed
                         SubscribeToMediaPlayer();
@@ -355,6 +391,10 @@ namespace Gelatinarm.Controls
                     try
                     {
                         UpdateNavigationButtons();
+                        if (_isQueueOpen)
+                        {
+                            RebuildQueuePanel();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -804,6 +844,239 @@ namespace Gelatinarm.Controls
             {
                 PlayPauseButton.Focus(FocusState.Programmatic);
                 Logger?.LogInformation("MusicPlayer: Focus set to PlayPauseButton via trigger hold");
+            }
+        }
+
+
+        private void QueueToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isQueueOpen = !_isQueueOpen;
+                if (_isQueueOpen)
+                {
+                    RebuildQueuePanel();
+                    QueuePanel.Visibility = Visibility.Visible;
+                    QueueToggleButton.Opacity = 1.0;
+                    // Adjust the control height to show both panel and bar
+                    Height = double.NaN; // Auto
+                }
+                else
+                {
+                    CloseQueuePanel();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in QueueToggleButton_Click");
+            }
+        }
+
+        private void CloseQueueButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseQueuePanel();
+        }
+
+        private void CloseQueuePanel()
+        {
+            _isQueueOpen = false;
+            QueuePanel.Visibility = Visibility.Collapsed;
+            QueueToggleButton.Opacity = 0.6;
+            Height = 84;
+        }
+
+        private void HistoryToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _isHistoryExpanded = !_isHistoryExpanded;
+                if (HistoryItemsPanel != null)
+                {
+                    HistoryItemsPanel.Visibility = _isHistoryExpanded ? Visibility.Visible : Visibility.Collapsed;
+                }
+                if (HistoryChevron != null)
+                {
+                    HistoryChevron.Glyph = _isHistoryExpanded ? "\uE70D" : "\uE76C"; // Down : Right
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in HistoryToggleButton_Click");
+            }
+        }
+
+        private void RebuildQueuePanel()
+        {
+            if (_musicPlayerService == null) return;
+
+            var queue = _musicPlayerService.Queue;
+            var currentIndex = _musicPlayerService.CurrentQueueIndex;
+            var history = _musicPlayerService.PlayedHistory;
+
+            // Previously Played section
+            if (history != null && history.Count > 0)
+            {
+                HistorySection.Visibility = Visibility.Visible;
+                HistoryHeaderText.Text = $"Previously Played ({history.Count})";
+                HistoryItemsPanel.Children.Clear();
+
+                for (int i = history.Count - 1; i >= 0; i--)
+                {
+                    var item = history[i];
+                    HistoryItemsPanel.Children.Add(CreateQueueItemRow(
+                        item, -1, isHistory: true, isCurrent: false));
+                }
+            }
+            else
+            {
+                HistorySection.Visibility = Visibility.Collapsed;
+            }
+
+            // Upcoming items
+            UpcomingItemsPanel.Children.Clear();
+
+            if (queue == null || queue.Count == 0) return;
+
+            // Now Playing label is always visible when queue panel is open
+            // Show the current track in the upcoming list with highlight
+            if (currentIndex >= 0 && currentIndex < queue.Count)
+            {
+                UpcomingItemsPanel.Children.Add(CreateQueueItemRow(
+                    queue[currentIndex], currentIndex, isHistory: false, isCurrent: true));
+            }
+
+            // Up next items
+            var hasUpcoming = currentIndex + 1 < queue.Count;
+            UpNextLabel.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
+
+            for (int i = currentIndex + 1; i < queue.Count; i++)
+            {
+                UpcomingItemsPanel.Children.Add(CreateQueueItemRow(
+                    queue[i], i, isHistory: false, isCurrent: false));
+            }
+        }
+
+        private Grid CreateQueueItemRow(BaseItemDto item, int queueIndex, bool isHistory, bool isCurrent)
+        {
+            var row = new Grid
+            {
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 1, 0, 1),
+                CornerRadius = new CornerRadius(6),
+                Background = isCurrent
+                    ? new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF))
+                    : null,
+            };
+
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (!isHistory && !isCurrent)
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            }
+
+            // Track info
+            var info = new StackPanel { VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center };
+
+            var nameBlock = new TextBlock
+            {
+                Text = item?.Name ?? "Unknown Track",
+                FontSize = 13,
+                FontWeight = isCurrent
+                    ? Windows.UI.Text.FontWeights.SemiBold
+                    : Windows.UI.Text.FontWeights.Normal,
+                Foreground = isCurrent
+                    ? new Windows.UI.Xaml.Media.SolidColorBrush(
+                        (Windows.UI.Color)Application.Current.Resources["SystemAccentColor"])
+                    : isHistory
+                        ? new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF))
+                        : new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+
+            var artistBlock = new TextBlock
+            {
+                Text = item?.AlbumArtist ?? item?.Artists?.FirstOrDefault() ?? "",
+                FontSize = 12,
+                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(
+                    Windows.UI.Color.FromArgb(isHistory ? (byte)0x60 : (byte)0x99, 0xFF, 0xFF, 0xFF)),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+
+            info.Children.Add(nameBlock);
+            if (!string.IsNullOrEmpty(artistBlock.Text))
+            {
+                info.Children.Add(artistBlock);
+            }
+
+            Grid.SetColumn(info, 0);
+            row.Children.Add(info);
+
+            // Remove button for upcoming (non-current) items
+            if (!isHistory && !isCurrent)
+            {
+                var removeBtn = new Button
+                {
+                    Width = 32,
+                    Height = 32,
+                    Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderBrush = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Content = new FontIcon
+                    {
+                        Glyph = "\uE74D",
+                        FontSize = 12,
+                        Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(
+                            Windows.UI.Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                    },
+                    Tag = queueIndex,
+                    IsTabStop = true,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                };
+                removeBtn.Click += RemoveQueueItem_Click;
+                Grid.SetColumn(removeBtn, 1);
+                row.Children.Add(removeBtn);
+            }
+
+            // Make tappable for playing (non-history items)
+            if (!isHistory && !isCurrent)
+            {
+                row.Tag = queueIndex;
+                row.Tapped += QueueItemRow_Tapped;
+            }
+
+            return row;
+        }
+
+        private void RemoveQueueItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is int index)
+                {
+                    _musicPlayerService?.RemoveFromQueue(index);
+                    Logger?.LogInformation($"Removed queue item at index {index}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in RemoveQueueItem_Click");
+            }
+        }
+
+        private void QueueItemRow_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Grid grid && grid.Tag is int index)
+                {
+                    _musicPlayerService?.PlayQueueItemAt(index);
+                    Logger?.LogInformation($"Playing queue item at index {index}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in QueueItemRow_Tapped");
             }
         }
 
