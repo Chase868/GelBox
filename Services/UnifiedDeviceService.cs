@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
 using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel;
 using Windows.Gaming.Input;
@@ -21,7 +21,7 @@ using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using GamepadButtons = Windows.Gaming.Input.GamepadButtons;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class DeviceInfo
     {

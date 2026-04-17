@@ -2,17 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Media.Streaming.Adaptive;
-using AudioTrack = Gelatinarm.Models.AudioTrack;
+using AudioTrack = GelBox.Models.AudioTrack;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     Service for controlling media playback operations

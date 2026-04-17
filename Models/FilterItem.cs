@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public class FilterItem : ObservableObject
     {

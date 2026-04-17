@@ -1,11 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Models;
+using GelBox.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 using Windows.System;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     Service for managing media controller input

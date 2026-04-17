@@ -2,15 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Views;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     SDK-based implementation of the media playback service with integrated session management

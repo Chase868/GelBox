@@ -1,9 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Jellyfin.Sdk.Generated.QuickConnect.Connect;
@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 using Windows.Security.Credentials;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     SDK-based implementation of the authentication service

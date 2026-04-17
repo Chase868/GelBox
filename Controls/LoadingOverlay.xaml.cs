@@ -1,10 +1,10 @@
-using Gelatinarm.Helpers;
+using GelBox.Helpers;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     public sealed partial class LoadingOverlay : UserControl
     {

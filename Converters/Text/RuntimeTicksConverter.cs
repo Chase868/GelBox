@@ -1,8 +1,8 @@
 using System;
-using Gelatinarm.Helpers;
+using GelBox.Helpers;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Text
+namespace GelBox.Converters.Text
 {
     /// <summary>
     ///     Converter to format runtime ticks to duration string

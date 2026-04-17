@@ -4,14 +4,14 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     Movie details view model

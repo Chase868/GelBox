@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <Application
-    x:Class="Gelatinarm.App"
+    x:Class="GelBox.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:visibilityConverters="using:Gelatinarm.Converters.Visibility"
-    xmlns:textConverters="using:Gelatinarm.Converters.Text"
-    xmlns:dataConverters="using:Gelatinarm.Converters.Data"
-    xmlns:imageConverters="using:Gelatinarm.Converters.Image"
-    xmlns:controls="using:Gelatinarm.Controls">
+    xmlns:visibilityConverters="using:GelBox.Converters.Visibility"
+    xmlns:textConverters="using:GelBox.Converters.Text"
+    xmlns:dataConverters="using:GelBox.Converters.Data"
+    xmlns:imageConverters="using:GelBox.Converters.Image"
+    xmlns:controls="using:GelBox.Controls">
     <Application.Resources>
         <ResourceDictionary>
             <!-- Essential Colors -->

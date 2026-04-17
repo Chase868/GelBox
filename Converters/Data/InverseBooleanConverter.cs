@@ -1,7 +1,7 @@
 using System;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Data
+namespace GelBox.Converters.Data
 {
     public class InverseBooleanConverter : IValueConverter
     {

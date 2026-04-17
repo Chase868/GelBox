@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Models;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     Service for managing subtitle tracks and selection

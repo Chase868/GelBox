@@ -5,12 +5,12 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Controls;
-using Gelatinarm.Helpers;
-using Gelatinarm.Services;
-using Gelatinarm.ViewModels;
-using Gelatinarm.Views;
+using GelBox.Constants;
+using GelBox.Controls;
+using GelBox.Helpers;
+using GelBox.Services;
+using GelBox.ViewModels;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,7 +29,7 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using UnhandledExceptionEventArgs = Windows.UI.Xaml.UnhandledExceptionEventArgs;
 
-namespace Gelatinarm
+namespace GelBox
 {
     public sealed partial class App : Application
     {

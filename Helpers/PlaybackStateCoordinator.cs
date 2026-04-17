@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 using Windows.UI.Xaml;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     internal sealed class PlaybackStateCoordinator
     {

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.Gaming.Input;
 using Windows.Media.Core;
@@ -13,9 +13,9 @@ using Windows.UI.Core;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
-using AudioTrack = Gelatinarm.Models.AudioTrack;
+using AudioTrack = GelBox.Models.AudioTrack;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public interface IAuthenticationService
     {

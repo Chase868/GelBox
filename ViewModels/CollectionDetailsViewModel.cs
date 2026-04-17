@@ -6,16 +6,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Media.Imaging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     ViewModel for the CollectionDetailsPage handling collection data and navigation

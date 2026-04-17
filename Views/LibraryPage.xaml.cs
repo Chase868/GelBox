@@ -6,11 +6,11 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.ViewModels;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.ViewModels;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
@@ -21,9 +21,9 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-using static Gelatinarm.Constants.LibraryConstants;
+using static GelBox.Constants.LibraryConstants;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class LibraryPage : BasePage
     {

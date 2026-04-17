@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class MediaDiscoveryService : BaseService, IMediaDiscoveryService
     {

@@ -3,12 +3,12 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     Base class for all ViewModels providing common functionality and proper disposal

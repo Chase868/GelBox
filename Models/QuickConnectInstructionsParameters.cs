@@ -1,4 +1,4 @@
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public class QuickConnectInstructionsParameters
     {

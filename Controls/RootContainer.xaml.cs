@@ -4,7 +4,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     public sealed partial class RootContainer : BaseControl
     {

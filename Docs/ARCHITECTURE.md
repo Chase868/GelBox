@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-Gelatinarm follows the Model-View-ViewModel (MVVM) pattern with a service layer:
+GelBox follows the Model-View-ViewModel (MVVM) pattern with a service layer:
 
 ```
 ┌─────────────────────────────────────────────────────────┐

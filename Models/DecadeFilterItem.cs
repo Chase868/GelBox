@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public class DecadeFilterItem : FilterItem
     {

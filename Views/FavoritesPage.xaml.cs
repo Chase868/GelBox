@@ -1,14 +1,14 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Controls;
-using Gelatinarm.ViewModels;
+using GelBox.Controls;
+using GelBox.ViewModels;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 // Added for Application.Current.Resources and Style
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class FavoritesPage : BasePage
     {

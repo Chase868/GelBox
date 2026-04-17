@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.ViewModels;
+using GelBox.ViewModels;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.System;
@@ -10,7 +10,7 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class AlbumDetailsPage : BasePage
     {

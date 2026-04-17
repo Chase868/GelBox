@@ -5,11 +5,11 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
+using GelBox.Constants;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     /// <summary>
     ///     Unified retry helper for consistent retry logic across the application

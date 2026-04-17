@@ -3,11 +3,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Services;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     Main settings view model that coordinates the three specialized settings view models

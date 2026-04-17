@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("GelatinarmXbox")]
-[assembly: AssemblyDescription("Gelatinarm Client for Xbox")]
+[assembly: AssemblyTitle("GelBoxXbox")]
+[assembly: AssemblyDescription("GelBox Client for Xbox")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("GelatinarmXbox")]
+[assembly: AssemblyProduct("GelBoxXbox")]
 [assembly: AssemblyCopyright("Copyright © 2025")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

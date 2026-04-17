@@ -1,7 +1,7 @@
 using System;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Text
+namespace GelBox.Converters.Text
 {
     /// <summary>
     ///     Consolidated converter for sort and filter UI elements

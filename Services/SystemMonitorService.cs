@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Devices.Enumeration;
@@ -18,7 +18,7 @@ using Windows.UI.Core;
 using Windows.UI.Xaml;
 // Stopwatch is here
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     // Simple memory usage levels for Xbox
     public enum AppMemoryUsageLevel

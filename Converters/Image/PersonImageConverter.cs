@@ -1,9 +1,9 @@
 using System;
-using Gelatinarm.Helpers;
+using GelBox.Helpers;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Image
+namespace GelBox.Converters.Image
 {
     /// <summary>
     ///     Converter to generate image URLs for BaseItemPerson objects

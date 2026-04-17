@@ -1,12 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Helpers;
+using GelBox.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     internal enum ResumeState
     {

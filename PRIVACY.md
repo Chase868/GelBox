@@ -1,9 +1,9 @@
-# Gelatinarm — Privacy Policy
+# GelBox — Privacy Policy
 
 Last updated: 2025-12-25
 
 ## Summary
-Gelatinarm is a Jellyfin client for Xbox. The app communicates only with the Jellyfin server URL you configure in the app. It does not send data to third‑party servers, analytics services, or external endpoints.
+GelBox is a Jellyfin client for Xbox. The app communicates only with the Jellyfin server URL you configure in the app. It does not send data to third‑party servers, analytics services, or external endpoints.
 
 ## What we send to your Jellyfin server
 - Authentication requests (username/password) and Quick Connect authentication — sent to the server you configure.

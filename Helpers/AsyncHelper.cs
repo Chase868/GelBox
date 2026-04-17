@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     /// <summary>
     ///     Provides helper methods for async operations

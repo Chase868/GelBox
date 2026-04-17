@@ -1,7 +1,7 @@
 using System;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public class PlaybackInfo
     {

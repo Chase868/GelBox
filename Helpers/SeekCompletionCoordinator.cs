@@ -2,7 +2,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     internal sealed class SeekCompletionCoordinator
     {

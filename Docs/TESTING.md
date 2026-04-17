@@ -1,6 +1,6 @@
-# Testing Guide for Gelatinarm
+# Testing Guide for GelBox
 
-This guide covers the manual testing procedures for Gelatinarm. The application requires manual testing on actual hardware due to the Xbox platform's unique requirements and UWP constraints.
+This guide covers the manual testing procedures for GelBox. The application requires manual testing on actual hardware due to the Xbox platform's unique requirements and UWP constraints.
 
 ## Table of Contents
 1. [Testing Philosophy](#testing-philosophy)
@@ -12,7 +12,7 @@ This guide covers the manual testing procedures for Gelatinarm. The application 
 
 ## Testing Philosophy
 
-Gelatinarm uses manual testing rather than automated unit tests because:
+GelBox uses manual testing rather than automated unit tests because:
 - UWP platform constraints make traditional unit testing challenging
 - Xbox hardware behavior differs from Windows emulation
 - Controller input requires physical testing

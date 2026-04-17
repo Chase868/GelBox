@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Gelatinarm Xbox application uses a comprehensive controller input system designed specifically for Xbox gamepad navigation. The architecture consists of four main components that work together to provide seamless controller support throughout the application.
+The GelBox Xbox application uses a comprehensive controller input system designed specifically for Xbox gamepad navigation. The architecture consists of four main components that work together to provide seamless controller support throughout the application.
 
 ## Architecture Components
 

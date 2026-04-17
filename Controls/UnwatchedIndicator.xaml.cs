@@ -2,7 +2,7 @@ using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     public sealed partial class UnwatchedIndicator : UserControl
     {

@@ -1,9 +1,9 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.ViewModels;
+using GelBox.ViewModels;
 using Windows.UI.Xaml;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class QuickConnectInstructionsPage : BasePage
     {

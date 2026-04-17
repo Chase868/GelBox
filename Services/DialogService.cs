@@ -1,11 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Models;
+using GelBox.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Popups;
 using Windows.UI.Xaml.Controls;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class DialogService : BaseService, IDialogService
     {

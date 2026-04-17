@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.ViewModels;
+using GelBox.ViewModels;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class SettingsPage : BasePage
     {

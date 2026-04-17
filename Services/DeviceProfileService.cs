@@ -3,7 +3,7 @@ using System.Linq;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class DeviceProfileService : BaseService, IDeviceProfileService
     {

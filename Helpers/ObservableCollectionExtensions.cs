@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     /// <summary>
     ///     Extension methods for ObservableCollection to improve performance with batch operations

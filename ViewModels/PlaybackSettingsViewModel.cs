@@ -1,11 +1,11 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Models;
+using GelBox.Services;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     Handles playback-related settings including quality, audio, subtitles, and playback behavior

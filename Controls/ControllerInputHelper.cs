@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
+using GelBox.Constants;
 using Microsoft.Extensions.Logging;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
@@ -8,7 +8,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     /// <summary>
     ///     Helper class for consistent controller input handling across all pages

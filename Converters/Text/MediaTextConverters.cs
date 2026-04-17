@@ -2,7 +2,7 @@ using System;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Text
+namespace GelBox.Converters.Text
 {
     /// <summary>
     ///     Consolidated converter for media text display (subtitles, continue watching, etc.)

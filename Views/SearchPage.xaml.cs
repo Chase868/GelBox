@@ -7,11 +7,11 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Controls;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Constants;
+using GelBox.Controls;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
@@ -21,7 +21,7 @@ using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Markup;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class
         SearchPage : BasePage, INotifyPropertyChanged // INotifyPropertyChanged for local properties

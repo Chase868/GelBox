@@ -5,7 +5,7 @@ using Windows.ApplicationModel.Core;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     /// <summary>
     ///     Helper class for common UI operations and patterns

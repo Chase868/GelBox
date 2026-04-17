@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Jellyfin.Sdk.Generated.Models;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public class MediaPlaybackParams
     {

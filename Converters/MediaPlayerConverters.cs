@@ -3,7 +3,7 @@ using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters
+namespace GelBox.Converters
 {
     /// <summary>
     ///     Converts boolean IsPlaying to appropriate play/pause icon

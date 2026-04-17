@@ -1,7 +1,7 @@
 using System;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Text
+namespace GelBox.Converters.Text
 {
     /// <summary>
     ///     Converter to format year for display

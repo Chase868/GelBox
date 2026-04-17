@@ -5,15 +5,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Constants;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Constants;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Microsoft.Extensions.Logging;
 using Windows.System.Profile;
 using Exception = System.Exception;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     ViewModel for the ServerSelectionPage handling server connection setup

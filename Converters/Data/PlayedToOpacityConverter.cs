@@ -2,7 +2,7 @@ using System;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Data
+namespace GelBox.Converters.Data
 {
     /// <summary>
     ///     Converts played status to opacity value for dimming watched content

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     /// <summary>
     ///     File-based cache provider implementation for storing cache data on disk

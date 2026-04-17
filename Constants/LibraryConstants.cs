@@ -1,4 +1,4 @@
-namespace Gelatinarm.Constants
+namespace GelBox.Constants
 {
     public static class LibraryConstants
     {

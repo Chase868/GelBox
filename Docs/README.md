@@ -1,6 +1,6 @@
-# Gelatinarm Documentation
+# GelBox Documentation
 
-Welcome to the Gelatinarm project documentation. Gelatinarm is a native Jellyfin client for Xbox, built using Universal Windows Platform (UWP) and optimized for gamepad navigation.
+Welcome to the GelBox project documentation. GelBox is a native Jellyfin client for Xbox, built using Universal Windows Platform (UWP) and optimized for gamepad navigation.
 
 ## Getting Started for New Contributors
 
@@ -16,9 +16,9 @@ Before contributing, ensure you have:
 1. **Clone and Build**
    ```bash
    git clone [repository-url]
-   cd gelatinarm
+   cd GelBox
    ```
-   Open `Gelatinarm.sln` in Visual Studio 2022
+   Open `GelBox.sln` in Visual Studio 2022
 
 2. **Understand the Architecture**
    - Review the [ARCHITECTURE.md](ARCHITECTURE.md) for MVVM pattern and design decisions
@@ -81,7 +81,7 @@ For detailed environment configuration → **[DEV_SETUP.md](DEV_SETUP.md)**
 
 ### Project Structure
 ```
-Gelatinarm/
+GelBox/
 ├── Views/          # User interface pages
 ├── ViewModels/     # Business logic for views
 ├── Services/       # Core functionality

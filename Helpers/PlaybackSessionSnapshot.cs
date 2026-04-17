@@ -1,7 +1,7 @@
 using System;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     internal readonly struct PlaybackSessionSnapshot
     {

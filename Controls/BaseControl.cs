@@ -1,15 +1,15 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     /// <summary>
     ///     Base class for all custom controls providing standardized error handling and service access

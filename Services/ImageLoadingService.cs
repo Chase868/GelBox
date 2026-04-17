@@ -3,14 +3,14 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
+using GelBox.Helpers;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Media.Imaging;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class ImageLoadingService : BaseService, IImageLoadingService
     {

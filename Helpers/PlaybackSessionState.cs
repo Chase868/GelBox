@@ -1,6 +1,6 @@
 using System;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     public sealed class PlaybackSessionState
     {

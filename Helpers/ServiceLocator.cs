@@ -1,6 +1,6 @@
 using System;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     public static class ServiceLocator
     {
@@ -13,7 +13,7 @@ namespace Gelatinarm.Helpers
 
             try
             {
-                return global::Gelatinarm.App.Current?.Services?.GetService(serviceType);
+                return global::GelBox.App.Current?.Services?.GetService(serviceType);
             }
             catch (InvalidOperationException)
             {
@@ -26,7 +26,7 @@ namespace Gelatinarm.Helpers
         {
             try
             {
-                return global::Gelatinarm.App.Current?.Services?.GetService(typeof(T)) as T;
+                return global::GelBox.App.Current?.Services?.GetService(typeof(T)) as T;
             }
             catch (InvalidOperationException)
             {

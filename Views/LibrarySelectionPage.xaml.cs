@@ -1,15 +1,15 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Services;
-using Gelatinarm.ViewModels;
+using GelBox.Constants;
+using GelBox.Services;
+using GelBox.ViewModels;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class LibrarySelectionPage : BasePage
     {

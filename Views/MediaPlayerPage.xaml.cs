@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.ViewModels;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.ViewModels;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
@@ -18,7 +18,7 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     /// <summary>
     ///     Refactored MediaPlayerPage with minimal code-behind

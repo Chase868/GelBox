@@ -1,12 +1,12 @@
 using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Models;
+using GelBox.Services;
 using Microsoft.Extensions.Logging;
 using Windows.Networking.Connectivity;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     /// <summary>
     /// Helper class for network connectivity checks

@@ -1,15 +1,15 @@
 using System;
 using System.Linq;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Services;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media.Imaging;
 
-namespace Gelatinarm.Converters.Image
+namespace GelBox.Converters.Image
 {
     /// <summary>
     ///     Unified converter for displaying various image types for Jellyfin items

@@ -1,11 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Controls;
-using Gelatinarm.ViewModels;
+using GelBox.Controls;
+using GelBox.ViewModels;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class ServerSelectionPage : BasePage
     {

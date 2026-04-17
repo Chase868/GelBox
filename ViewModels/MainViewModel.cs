@@ -7,17 +7,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.ApplicationModel.Core;
 // Add System.Threading for CancellationTokenSource
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     public class MainViewModel : BaseViewModel
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
-using Gelatinarm.Controls;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Controls;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
@@ -12,7 +12,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     /// <summary>
     ///     Base class for all pages that provides standard lifecycle management,

@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Controls;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Controls;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Windows.Foundation;
 using Windows.System;
@@ -13,7 +13,7 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     /// <summary>
     ///     Common functionality for detail pages

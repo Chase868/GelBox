@@ -1,11 +1,11 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:Gelatinarm.Controls"
-    xmlns:converters="using:Gelatinarm.Converters.Visibility"
-    xmlns:textConverters="using:Gelatinarm.Converters.Text"
-    xmlns:imageConverters="using:Gelatinarm.Converters.Image"
-    xmlns:mediaConverters="using:Gelatinarm.Converters">
+    xmlns:controls="using:GelBox.Controls"
+    xmlns:converters="using:GelBox.Converters.Visibility"
+    xmlns:textConverters="using:GelBox.Converters.Text"
+    xmlns:imageConverters="using:GelBox.Converters.Image"
+    xmlns:mediaConverters="using:GelBox.Converters">
 
     <!-- Converters -->
     <converters:VisibilityConverter x:Key="BoolToVisibility" ConversionType="Boolean" />

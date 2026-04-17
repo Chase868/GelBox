@@ -2,18 +2,18 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Microsoft.Extensions.Logging;
 using Windows.Storage;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     Handles server-related settings including connection, authentication, and Quick Connect

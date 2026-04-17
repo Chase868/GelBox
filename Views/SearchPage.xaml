@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <views:BasePage
-    x:Class="Gelatinarm.Views.SearchPage"
+    x:Class="GelBox.Views.SearchPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:views="using:Gelatinarm.Views"
+    xmlns:views="using:GelBox.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:controls="using:Gelatinarm.Controls"
+    xmlns:controls="using:GelBox.Controls"
     mc:Ignorable="d"
     Background="{StaticResource ApplicationPageBackgroundThemeBrush}">
 

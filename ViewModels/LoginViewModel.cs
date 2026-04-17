@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 using Exception = System.Exception;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     /// <summary>
     ///     ViewModel for the LoginPage handling user authentication

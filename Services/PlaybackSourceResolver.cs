@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Gelatinarm.Models;
+using GelBox.Models;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     internal sealed class PlaybackSourceResolver
     {

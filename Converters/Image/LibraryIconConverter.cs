@@ -2,7 +2,7 @@ using System;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Image
+namespace GelBox.Converters.Image
 {
     /// <summary>
     ///     Converts library collection type to icon glyph

@@ -1,4 +1,4 @@
-namespace Gelatinarm.Constants
+namespace GelBox.Constants
 {
     /// <summary>
     ///     Constants related to retry logic and timeouts throughout the application

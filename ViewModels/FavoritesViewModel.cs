@@ -6,15 +6,15 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     public class FavoritesViewModel : BaseViewModel, IDisposable
     {

@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
-using Gelatinarm.Views;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
+using GelBox.Views;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using RepeatMode = Gelatinarm.Services.RepeatMode;
+using RepeatMode = GelBox.Services.RepeatMode;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     public sealed partial class MusicPlayer : BaseControl
     {

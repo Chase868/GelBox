@@ -1,12 +1,12 @@
 using System;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
+using GelBox.Helpers;
+using GelBox.Models;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public enum RepeatMode
     {

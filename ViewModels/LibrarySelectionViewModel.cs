@@ -3,13 +3,13 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Helpers;
-using Gelatinarm.Services;
+using GelBox.Helpers;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     public class LibrarySelectionViewModel : BaseViewModel
     {

@@ -1,11 +1,11 @@
 using System.Threading.Tasks;
-using Gelatinarm.ViewModels;
+using GelBox.ViewModels;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
 
-namespace Gelatinarm.Views
+namespace GelBox.Views
 {
     public sealed partial class PersonDetailsPage : DetailsPage
     {

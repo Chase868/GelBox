@@ -10,17 +10,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using Gelatinarm.Constants;
-using Gelatinarm.Helpers;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Constants;
+using GelBox.Helpers;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml;
-using static Gelatinarm.Constants.LibraryConstants;
+using static GelBox.Constants.LibraryConstants;
 
-namespace Gelatinarm.ViewModels
+namespace GelBox.ViewModels
 {
     public class LibraryViewModel : BaseViewModel
     {

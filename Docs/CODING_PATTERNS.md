@@ -1,6 +1,6 @@
-# Gelatinarm Coding Patterns
+# GelBox Coding Patterns
 
-This document describes the established coding patterns in the Gelatinarm codebase. These patterns ensure consistency, reduce duplication, and improve maintainability.
+This document describes the established coding patterns in the GelBox codebase. These patterns ensure consistency, reduce duplication, and improve maintainability.
 
 ## Table of Contents
 1. [Error Handling Pattern](#error-handling-pattern)

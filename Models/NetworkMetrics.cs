@@ -1,6 +1,6 @@
 using System;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     public enum ConnectionType
     {

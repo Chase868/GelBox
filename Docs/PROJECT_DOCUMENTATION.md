@@ -1,7 +1,7 @@
-# Gelatinarm Project Documentation
+# GelBox Project Documentation
 
 ## Overview
-Gelatinarm is a Jellyfin client application built for Xbox using Universal Windows Platform (UWP). The application allows users to browse and play media content from their Jellyfin servers on Xbox consoles.
+GelBox is a Jellyfin client application built for Xbox using Universal Windows Platform (UWP). The application allows users to browse and play media content from their Jellyfin servers on Xbox consoles.
 
 ## Quick Reference
 - **Architecture Pattern**: MVVM with Services
@@ -27,7 +27,7 @@ Gelatinarm is a Jellyfin client application built for Xbox using Universal Windo
 The project follows a Model-View-ViewModel (MVVM) architecture pattern with the following main components:
 
 ```
-/Volumes/gelatinarm/
+/Volumes/GelBox/
 ├── App.xaml.cs                 # Application entry point
 ├── Views/                      # User interface pages
 ├── ViewModels/                 # Business logic for views
@@ -64,7 +64,7 @@ Page (UWP Framework)
 
 ### Root Files
 - **App.xaml / App.xaml.cs** - Application startup, service registration, and global resources
-- **Gelatinarm.csproj** - Project configuration and dependencies
+- **GelBox.csproj** - Project configuration and dependencies
 - **Package.appxmanifest** - Application metadata and capabilities
 
 ### Views/ (User Interface Pages)

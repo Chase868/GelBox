@@ -1,8 +1,8 @@
 using System;
 using System.Globalization;
-using Gelatinarm.Constants;
+using GelBox.Constants;
 
-namespace Gelatinarm.Helpers
+namespace GelBox.Helpers
 {
     public static class TimeFormattingHelper
     {

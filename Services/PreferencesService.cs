@@ -5,13 +5,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Gelatinarm.Constants;
-using Gelatinarm.Models;
+using GelBox.Constants;
+using GelBox.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Storage;
 using Windows.System.Profile;
 
-namespace Gelatinarm.Services
+namespace GelBox.Services
 {
     public class PreferencesService : BaseService, IPreferencesService
     {

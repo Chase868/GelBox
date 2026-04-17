@@ -2,7 +2,7 @@ using System;
 using Jellyfin.Sdk.Generated.Models;
 using Windows.UI.Xaml.Data;
 
-namespace Gelatinarm.Converters.Visibility
+namespace GelBox.Converters.Visibility
 {
     /// <summary>
     ///     Consolidated visibility converter supporting multiple conversion types

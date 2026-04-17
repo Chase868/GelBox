@@ -11,9 +11,9 @@
 ### 1. Clone and Open Project
 ```bash
 git clone [repository-url]
-cd gelatinarm
+cd GelBox
 ```
-Open `Gelatinarm.sln` in Visual Studio 2022
+Open `GelBox.sln` in Visual Studio 2022
 
 ### 2. First Build
 1. Set build configuration to `Debug` and platform to `x64`
@@ -23,7 +23,7 @@ Open `Gelatinarm.sln` in Visual Studio 2022
 ### 3. Running the Application
 
 #### On Windows (Development)
-1. Set `Gelatinarm` as startup project
+1. Set `GelBox` as startup project
 2. Select "Local Machine" as target
 3. Press F5 to run with debugging
 

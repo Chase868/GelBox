@@ -1,13 +1,13 @@
 using System;
-using Gelatinarm.Models;
-using Gelatinarm.Services;
+using GelBox.Models;
+using GelBox.Services;
 using Jellyfin.Sdk;
 using Windows.System;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
 
-namespace Gelatinarm.Controls
+namespace GelBox.Controls
 {
     public sealed partial class PlaybackSettings : BaseControl
     {

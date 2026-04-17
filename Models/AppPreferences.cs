@@ -1,7 +1,7 @@
 using System;
-using Gelatinarm.Constants;
+using GelBox.Constants;
 
-namespace Gelatinarm.Models
+namespace GelBox.Models
 {
     /// <summary>
     ///     Consolidated app preferences model combining user and playback preferences
