@@ -207,9 +207,8 @@ namespace Gelatinarm.Services
             catch (Exception ex)
             {
                 var context = CreateErrorContext("RemoveFromQueue", ErrorCategory.Media);
-                AsyncHelper.FireAndForget(async () =>
-                    await ErrorHandler.HandleErrorAsync(ex, context, false),
-                    Logger, typeof(MediaQueueService));
+                FireAndForget(async () =>
+                    await ErrorHandler.HandleErrorAsync(ex, context, false));
             }
         }
 
