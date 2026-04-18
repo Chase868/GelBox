@@ -7,7 +7,7 @@ GelBox builds on Gelatinarm with UI modernization, improved music queue manageme
 
 A native Jellyfin client for Xbox One and Xbox Series X|S consoles, built with UWP (Universal Windows Platform) and optimized for controller navigation and TV viewing.
 
-<a href="https://apps.microsoft.com/detail/9MWJCZCP7Q17?referrer=appbadge&mode=direct">
+<a href="https://apps.microsoft.com/detail/9NK4M3LZ6BVB">
     <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200"/>
 </a>
 
