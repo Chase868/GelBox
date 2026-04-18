@@ -7,6 +7,7 @@ using GelBox.Models;
 using GelBox.Services;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
+using Windows.UI;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -258,6 +259,9 @@ namespace GelBox.Views
 
         #region Background Preference
 
+        private static readonly Color NeutralAccentColor = Color.FromArgb(255, 90, 90, 90); // Dark grey
+        private static Color? _originalAccentColor;
+
         private async Task ApplyBackgroundPreferenceAsync()
         {
             if (PreferencesService == null) return;
@@ -267,18 +271,47 @@ namespace GelBox.Views
 
             await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
             {
+                var resources = Application.Current.Resources;
+
                 if (useGradient)
                 {
-                    if (Application.Current.Resources.TryGetValue("GradientPageBackgroundBrush", out var brush) && brush is Brush gradientBrush)
+                    if (resources.TryGetValue("GradientPageBackgroundBrush", out var brush) && brush is Brush gradientBrush)
                     {
                         Background = gradientBrush;
+                    }
+
+                    // Save original accent color on first use, then switch to neutral
+                    if (resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentObj) && accentObj is SolidColorBrush accentBrush)
+                    {
+                        if (!_originalAccentColor.HasValue)
+                        {
+                            _originalAccentColor = accentBrush.Color;
+                        }
+                        accentBrush.Color = NeutralAccentColor;
+                    }
+                    if (resources.TryGetValue("AppAccentBrush", out var appObj) && appObj is SolidColorBrush appAccentBrush)
+                    {
+                        appAccentBrush.Color = NeutralAccentColor;
                     }
                 }
                 else
                 {
-                    if (Application.Current.Resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var brush) && brush is Brush solidBrush)
+                    if (resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var brush) && brush is Brush solidBrush)
                     {
                         Background = solidBrush;
+                    }
+
+                    // Restore original accent color
+                    if (_originalAccentColor.HasValue)
+                    {
+                        if (resources.TryGetValue("SystemControlHighlightAccentBrush", out var accentObj) && accentObj is SolidColorBrush accentBrush)
+                        {
+                            accentBrush.Color = _originalAccentColor.Value;
+                        }
+                        if (resources.TryGetValue("AppAccentBrush", out var appObj) && appObj is SolidColorBrush appAccentBrush)
+                        {
+                            appAccentBrush.Color = _originalAccentColor.Value;
+                        }
                     }
                 }
             });
