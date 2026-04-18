@@ -946,13 +946,13 @@ namespace GelBox.Controls
             }
 
             // Up next items
-            var hasUpcoming = currentIndex + 1 < queue.Count;
-            UpNextLabel.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
+            var upcomingItems = _musicPlayerService.GetUpcomingQueue();
+            UpNextLabel.Visibility = upcomingItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            for (int i = currentIndex + 1; i < queue.Count; i++)
+            for (int i = 0; i < upcomingItems.Count; i++)
             {
                 UpcomingItemsPanel.Children.Add(CreateQueueItemRow(
-                    queue[i], i, isHistory: false, isCurrent: false));
+                    upcomingItems[i].Item, upcomingItems[i].QueueIndex, isHistory: false, isCurrent: false));
             }
         }
 

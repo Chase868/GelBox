@@ -527,7 +527,6 @@ namespace GelBox.Services
                             {
                                 config.QueryParameters.ParentId = item.Id.Value;
                                 config.QueryParameters.UserId = userIdGuid;
-                                config.QueryParameters.SortBy = new[] { ItemSortBy.SortName };
                             }).ConfigureAwait(false);
 
                             if (response?.Items?.Any() == true)

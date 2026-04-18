@@ -90,6 +90,39 @@ namespace GelBox.Services
         public RepeatMode RepeatMode => _mediaControlService.RepeatMode;
         public List<BaseItemDto> PlayedHistory => _playedHistory;
 
+        public List<(BaseItemDto Item, int QueueIndex)> GetUpcomingQueue()
+        {
+            var queue = _queueService.Queue;
+            if (queue == null || queue.Count == 0) return new List<(BaseItemDto, int)>();
+
+            if (_queueService.IsShuffleMode && _queueService.ShuffledIndices != null)
+            {
+                var result = new List<(BaseItemDto, int)>();
+                var shuffledIndices = _queueService.ShuffledIndices;
+                var currentShuffleIndex = _queueService.CurrentShuffleIndex;
+
+                for (int i = currentShuffleIndex + 1; i < shuffledIndices.Count; i++)
+                {
+                    var idx = shuffledIndices[i];
+                    if (idx >= 0 && idx < queue.Count)
+                    {
+                        result.Add((queue[idx], idx));
+                    }
+                }
+                return result;
+            }
+            else
+            {
+                var currentIndex = _queueService.CurrentQueueIndex;
+                var result = new List<(BaseItemDto, int)>();
+                for (int i = currentIndex + 1; i < queue.Count; i++)
+                {
+                    result.Add((queue[i], i));
+                }
+                return result;
+            }
+        }
+
         public event EventHandler<BaseItemDto> NowPlayingChanged;
         public event EventHandler<MediaPlaybackState> PlaybackStateChanged;
         public event EventHandler<List<BaseItemDto>> QueueChanged;
