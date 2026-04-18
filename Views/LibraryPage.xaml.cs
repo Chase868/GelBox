@@ -776,7 +776,9 @@ namespace GelBox.Views
                     // Use MusicPlayerService for music playback
                     if (_musicPlayerService != null)
                     {
-                        await _musicPlayerService.PlayItems(result.Items.ToList()).ConfigureAwait(false);
+                        var random = new Random();
+                        var randomStart = random.Next(result.Items.Count);
+                        await _musicPlayerService.PlayItems(result.Items.ToList(), randomStart).ConfigureAwait(false);
                     }
                     else
                     {
@@ -801,7 +803,8 @@ namespace GelBox.Views
                     // Use MusicPlayerService for music playback
                     if (_musicPlayerService != null)
                     {
-                        await _musicPlayerService.PlayItems(shuffledItems).ConfigureAwait(false);
+                        var randomStart = random.Next(shuffledItems.Count);
+                        await _musicPlayerService.PlayItems(shuffledItems, randomStart).ConfigureAwait(false);
                     }
                     else
                     {

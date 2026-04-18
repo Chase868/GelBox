@@ -360,6 +360,52 @@
 
                     </StackPanel>
                 </Border>
+
+                <!-- About Section -->
+                <Border Style="{StaticResource SettingsSectionBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="About"
+                                   Style="{StaticResource SubtitleTextBlockStyle}"
+                                   Margin="0,0,0,12" />
+
+                        <TextBlock Text="GelBox v1.0.0"
+                                   Style="{StaticResource BodyTextBlockStyle}"
+                                   Margin="0,0,0,8" />
+
+                        <TextBlock Style="{StaticResource BodyTextBlockStyle}"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12"
+                                   FontSize="13">
+                            A Jellyfin client for Xbox, forked from Gelatinarm.
+                        </TextBlock>
+
+                        <HyperlinkButton NavigateUri="https://github.com/Chase868/GelBox"
+                                         Content="GelBox on GitHub"
+                                         Padding="0"
+                                         Margin="0,0,0,4" />
+
+                        <TextBlock Style="{StaticResource BodyTextBlockStyle}"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,4"
+                                   FontSize="13">
+                            Based on the original Gelatinarm app:
+                        </TextBlock>
+
+                        <HyperlinkButton NavigateUri="https://github.com/gitman-101111/gelatinarm"
+                                         Content="Gelatinarm on GitHub"
+                                         Padding="0"
+                                         Margin="0,0,0,8" />
+
+                        <TextBlock Style="{StaticResource BodyTextBlockStyle}"
+                                   Opacity="0.5"
+                                   FontSize="12"
+                                   Margin="0,4,0,0">
+                            Licensed under the MIT License.
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>
