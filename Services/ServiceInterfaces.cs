@@ -326,6 +326,15 @@ namespace GelBox.Services
         Task<IEnumerable<BaseItemDto>> GetRecommendedAsync(int limit = 20,
             CancellationToken cancellationToken = default);
 
+        Task<IEnumerable<BaseItemDto>> GetRecommendedMoviesAsync(int limit = 20,
+            CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<BaseItemDto>> GetRecommendedShowsAsync(int limit = 20,
+            CancellationToken cancellationToken = default);
+
+        Task<IEnumerable<BaseItemDto>> GetRecommendedMusicAsync(int limit = 20,
+            CancellationToken cancellationToken = default);
+
         Task<IEnumerable<BaseItemDto>> GetNextUpEpisodesAsync(string seriesId, int limit = 20,
             CancellationToken cancellationToken = default);
 

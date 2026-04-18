@@ -314,6 +314,132 @@ namespace GelBox.Services
             }
         }
 
+        public async Task<IEnumerable<BaseItemDto>> GetRecommendedMoviesAsync(int limit = 0,
+            CancellationToken cancellationToken = default)
+        {
+            limit = ValidateLimit(limit);
+            if (limit > 100) limit = 100;
+
+            return await GetCachedOrFetchAsync(
+                $"RecommendedMovies_{limit}",
+                async ct =>
+                {
+                    var context = CreateErrorContext("GetRecommendedMovies", ErrorCategory.Media);
+                    try
+                    {
+                        if (!TryGetUserIdGuid(out var userGuid))
+                            return new List<BaseItemDto>();
+
+                        if (_apiClient == null)
+                        {
+                            Logger?.LogError("SDK client not available");
+                            return new List<BaseItemDto>();
+                        }
+
+                        var response = await _apiClient.Movies.Recommendations.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = userGuid;
+                            config.QueryParameters.Fields = DefaultItemFields;
+                        }, ct).ConfigureAwait(false);
+
+                        var recommendations = new List<BaseItemDto>();
+                        if (response?.Any() == true)
+                        {
+                            foreach (var group in response.Take(3))
+                            {
+                                if (group?.Items?.Any() == true)
+                                    recommendations.AddRange(group.Items.Take(limit / 3));
+                            }
+                        }
+                        return recommendations;
+                    }
+                    catch (Exception ex)
+                    {
+                        return await ErrorHandler.HandleErrorAsync(ex, context, new List<BaseItemDto>());
+                    }
+                },
+                cancellationToken);
+        }
+
+        public async Task<IEnumerable<BaseItemDto>> GetRecommendedShowsAsync(int limit = 0,
+            CancellationToken cancellationToken = default)
+        {
+            limit = ValidateLimit(limit);
+            if (limit > 100) limit = 100;
+
+            return await GetCachedOrFetchAsync(
+                $"RecommendedShows_{limit}",
+                async ct =>
+                {
+                    var context = CreateErrorContext("GetRecommendedShows", ErrorCategory.Media);
+                    try
+                    {
+                        if (!TryGetUserIdGuid(out var userGuid))
+                            return new List<BaseItemDto>();
+
+                        if (_apiClient == null)
+                        {
+                            Logger?.LogError("SDK client not available");
+                            return new List<BaseItemDto>();
+                        }
+
+                        var response = await _apiClient.Items.Suggestions.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = userGuid;
+                            config.QueryParameters.Type = new[] { BaseItemKind.Series };
+                            config.QueryParameters.Limit = limit;
+                        }, ct).ConfigureAwait(false);
+
+                        return response?.Items?.ToList() ?? new List<BaseItemDto>();
+                    }
+                    catch (Exception ex)
+                    {
+                        return await ErrorHandler.HandleErrorAsync(ex, context, new List<BaseItemDto>());
+                    }
+                },
+                cancellationToken);
+        }
+
+        public async Task<IEnumerable<BaseItemDto>> GetRecommendedMusicAsync(int limit = 0,
+            CancellationToken cancellationToken = default)
+        {
+            limit = ValidateLimit(limit);
+            if (limit > 100) limit = 100;
+
+            return await GetCachedOrFetchAsync(
+                $"RecommendedMusic_{limit}",
+                async ct =>
+                {
+                    var context = CreateErrorContext("GetRecommendedMusic", ErrorCategory.Media);
+                    try
+                    {
+                        if (!TryGetUserIdGuid(out var userGuid))
+                            return new List<BaseItemDto>();
+
+                        if (_apiClient == null)
+                        {
+                            Logger?.LogError("SDK client not available");
+                            return new List<BaseItemDto>();
+                        }
+
+                        var response = await _apiClient.Items.Suggestions.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = userGuid;
+                            config.QueryParameters.MediaType = new[] { MediaType.Audio };
+                            config.QueryParameters.Type = new[] { BaseItemKind.MusicAlbum };
+                            config.QueryParameters.Limit = limit;
+                        }, ct).ConfigureAwait(false);
+
+                        return response?.Items?.ToList() ?? new List<BaseItemDto>();
+                    }
+                    catch (Exception ex)
+                    {
+                        return await ErrorHandler.HandleErrorAsync(ex, context, new List<BaseItemDto>());
+                    }
+                },
+                cancellationToken);
+        }
+
         public async Task<IEnumerable<BaseItemDto>> GetNextUpEpisodesAsync(string seriesId, int limit = 0,
             CancellationToken cancellationToken = default)
         {

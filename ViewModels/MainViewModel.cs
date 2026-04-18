@@ -39,8 +39,9 @@ namespace GelBox.ViewModels
         private bool _hasLatestTVShows = false;
         private bool _hasLoadedData = false;
         private bool _hasNextUp = false;
-        private bool _hasRecentlyAdded = false;
-        private bool _hasRecommended = false;
+        private bool _hasRecommendedMovies = false;
+        private bool _hasRecommendedShows = false;
+        private bool _hasRecommendedMusic = false;
         private DateTime _lastDataLoadTime = DateTime.MinValue;
 
         public MainViewModel(IMediaDiscoveryService mediaDiscoveryService,
@@ -65,16 +66,18 @@ namespace GelBox.ViewModels
             LatestMovies = new ObservableCollection<BaseItemDto>();
             LatestTVShows = new ObservableCollection<BaseItemDto>();
             LatestMusic = new ObservableCollection<BaseItemDto>();
-            RecentlyAdded = new ObservableCollection<BaseItemDto>();
-            Recommended = new ObservableCollection<BaseItemDto>();
+            RecommendedMovies = new ObservableCollection<BaseItemDto>();
+            RecommendedShows = new ObservableCollection<BaseItemDto>();
+            RecommendedMusic = new ObservableCollection<BaseItemDto>();
             NextUpItems = new ObservableCollection<BaseItemDto>();
 
             HasContinueWatching = false;
             HasLatestMovies = false;
             HasLatestTVShows = false;
             HasLatestMusic = false;
-            HasRecentlyAdded = false;
-            HasRecommended = false;
+            HasRecommendedMovies = false;
+            HasRecommendedShows = false;
+            HasRecommendedMusic = false;
             HasNextUp = false;
             IsLoading = false;
 
@@ -83,8 +86,6 @@ namespace GelBox.ViewModels
             LatestMovies.CollectionChanged += OnLatestMoviesChanged;
             LatestTVShows.CollectionChanged += OnLatestTVShowsChanged;
             LatestMusic.CollectionChanged += OnLatestMusicChanged;
-            RecentlyAdded.CollectionChanged += OnRecentlyAddedChanged;
-            Recommended.CollectionChanged += OnRecommendedChanged;
 
             NavigateToSearchCommand = new RelayCommand(() => _navigationService?.NavigateToSearch());
             NavigateToFavoritesCommand = new RelayCommand(() => _navigationService?.NavigateToFavorites());
@@ -115,16 +116,22 @@ namespace GelBox.ViewModels
             set => SetProperty(ref _hasLatestTVShows, value);
         }
 
-        public bool HasRecentlyAdded
+        public bool HasRecommendedMovies
         {
-            get => _hasRecentlyAdded;
-            set => SetProperty(ref _hasRecentlyAdded, value);
+            get => _hasRecommendedMovies;
+            set => SetProperty(ref _hasRecommendedMovies, value);
         }
 
-        public bool HasRecommended
+        public bool HasRecommendedShows
         {
-            get => _hasRecommended;
-            set => SetProperty(ref _hasRecommended, value);
+            get => _hasRecommendedShows;
+            set => SetProperty(ref _hasRecommendedShows, value);
+        }
+
+        public bool HasRecommendedMusic
+        {
+            get => _hasRecommendedMusic;
+            set => SetProperty(ref _hasRecommendedMusic, value);
         }
 
         public bool HasLatestMusic
@@ -143,8 +150,9 @@ namespace GelBox.ViewModels
         public ObservableCollection<BaseItemDto> LatestMovies { get; }
         public ObservableCollection<BaseItemDto> LatestTVShows { get; }
         public ObservableCollection<BaseItemDto> LatestMusic { get; }
-        public ObservableCollection<BaseItemDto> RecentlyAdded { get; }
-        public ObservableCollection<BaseItemDto> Recommended { get; }
+        public ObservableCollection<BaseItemDto> RecommendedMovies { get; }
+        public ObservableCollection<BaseItemDto> RecommendedShows { get; }
+        public ObservableCollection<BaseItemDto> RecommendedMusic { get; }
         public ObservableCollection<BaseItemDto> NextUpItems { get; }
 
         public ICommand NavigateToSearchCommand { get; }
@@ -183,16 +191,18 @@ namespace GelBox.ViewModels
                 LatestMovies?.Clear();
                 LatestTVShows?.Clear();
                 LatestMusic?.Clear();
-                RecentlyAdded?.Clear();
-                Recommended?.Clear();
+                RecommendedMovies?.Clear();
+                RecommendedShows?.Clear();
+                RecommendedMusic?.Clear();
                 NextUpItems?.Clear();
 
                 HasContinueWatching = false;
                 HasLatestMovies = false;
                 HasLatestTVShows = false;
                 HasLatestMusic = false;
-                HasRecentlyAdded = false;
-                HasRecommended = false;
+                HasRecommendedMovies = false;
+                HasRecommendedShows = false;
+                HasRecommendedMusic = false;
                 HasNextUp = false;
             });
 
@@ -383,35 +393,65 @@ namespace GelBox.ViewModels
                     priority2Tasks.Add(getLatestMusicTask);
                 }
 
-                var getRecentlyAddedTask = GetOrFetchCachedAsync(
-                    "RecentlyAdded",
-                    async () => await BaseService.RetryAsync(
-                        () => _mediaDiscoveryService.GetRecentlyAddedAsync(20, cancellationToken),
-                        _logger,
-                        2,
-                        TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
-                        cancellationToken,
-                        nameof(_mediaDiscoveryService.GetRecentlyAddedAsync)).ConfigureAwait(false),
-                    cancellationToken);
-                priority2Tasks.Add(getRecentlyAddedTask);
-
                 // Wait for priority 2 to complete
                 await Task.WhenAll(priority2Tasks).ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Priority 3: Recommendations (can be loaded last)
-                var getRecommendedTask = GetOrFetchCachedAsync(
-                    "Recommended",
-                    async () => await BaseService.RetryAsync(
-                        () => _mediaDiscoveryService.GetRecommendedAsync(20, cancellationToken),
-                        _logger,
-                        2,
-                        TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
-                        cancellationToken,
-                        nameof(_mediaDiscoveryService.GetRecommendedAsync)).ConfigureAwait(false),
-                    cancellationToken);
+                // Priority 3: Recommendations (can be loaded last, controlled by toggles)
+                var priority3Tasks = new List<Task<object>>();
+                Task<object> getRecommendedMoviesTask = null;
+                Task<object> getRecommendedShowsTask = null;
+                Task<object> getRecommendedMusicTask = null;
 
-                await getRecommendedTask.ConfigureAwait(false);
+                if (showMovies)
+                {
+                    getRecommendedMoviesTask = GetOrFetchCachedAsync(
+                        "RecommendedMovies",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetRecommendedMoviesAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetRecommendedMoviesAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority3Tasks.Add(getRecommendedMoviesTask);
+                }
+
+                if (showTVShows)
+                {
+                    getRecommendedShowsTask = GetOrFetchCachedAsync(
+                        "RecommendedShows",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetRecommendedShowsAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetRecommendedShowsAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority3Tasks.Add(getRecommendedShowsTask);
+                }
+
+                if (showMusic)
+                {
+                    getRecommendedMusicTask = GetOrFetchCachedAsync(
+                        "RecommendedMusic",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetRecommendedMusicAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetRecommendedMusicAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority3Tasks.Add(getRecommendedMusicTask);
+                }
+
+                if (priority3Tasks.Count > 0)
+                {
+                    await Task.WhenAll(priority3Tasks).ConfigureAwait(false);
+                }
 
                 cancellationToken.ThrowIfCancellationRequested(); // Check before processing results
 
@@ -420,8 +460,9 @@ namespace GelBox.ViewModels
                 var latestMovies = getLatestMoviesTask != null ? await getLatestMoviesTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
                 var latestTVShows = getLatestShowsTask != null ? await getLatestShowsTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
                 var latestMusic = getLatestMusicTask != null ? await getLatestMusicTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
-                var recentlyAdded = await getRecentlyAddedTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
-                var recommended = await getRecommendedTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
+                var recommendedMovies = getRecommendedMoviesTask != null ? await getRecommendedMoviesTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
+                var recommendedShows = getRecommendedShowsTask != null ? await getRecommendedShowsTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
+                var recommendedMusic = getRecommendedMusicTask != null ? await getRecommendedMusicTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
                 var nextUp = await getNextUpTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
 
                 _logger?.LogInformation(
@@ -483,20 +524,46 @@ namespace GelBox.ViewModels
                             }
                         }
 
-                        if (RecentlyAdded != null)
+                        if (RecommendedMovies != null)
                         {
-                            RecentlyAdded.ReplaceAll(recentlyAdded ?? Enumerable.Empty<BaseItemDto>());
-                            HasRecentlyAdded = RecentlyAdded.Any();
-                            _logger?.LogInformation(
-                                $"Updated RecentlyAdded: {RecentlyAdded.Count} items, HasRecentlyAdded: {HasRecentlyAdded}");
+                            if (showMovies)
+                            {
+                                RecommendedMovies.ReplaceAll(recommendedMovies ?? Enumerable.Empty<BaseItemDto>());
+                                HasRecommendedMovies = RecommendedMovies.Any();
+                            }
+                            else
+                            {
+                                RecommendedMovies.Clear();
+                                HasRecommendedMovies = false;
+                            }
                         }
 
-                        if (Recommended != null)
+                        if (RecommendedShows != null)
                         {
-                            Recommended.ReplaceAll(recommended ?? Enumerable.Empty<BaseItemDto>());
-                            HasRecommended = Recommended.Any();
-                            _logger?.LogInformation(
-                                $"Updated Recommended: {Recommended.Count} items, HasRecommended: {HasRecommended}");
+                            if (showTVShows)
+                            {
+                                RecommendedShows.ReplaceAll(recommendedShows ?? Enumerable.Empty<BaseItemDto>());
+                                HasRecommendedShows = RecommendedShows.Any();
+                            }
+                            else
+                            {
+                                RecommendedShows.Clear();
+                                HasRecommendedShows = false;
+                            }
+                        }
+
+                        if (RecommendedMusic != null)
+                        {
+                            if (showMusic)
+                            {
+                                RecommendedMusic.ReplaceAll(recommendedMusic ?? Enumerable.Empty<BaseItemDto>());
+                                HasRecommendedMusic = RecommendedMusic.Any();
+                            }
+                            else
+                            {
+                                RecommendedMusic.Clear();
+                                HasRecommendedMusic = false;
+                            }
                         }
 
                         if (NextUpItems != null)
@@ -605,8 +672,9 @@ namespace GelBox.ViewModels
                 LatestMovies?.Clear();
                 LatestTVShows?.Clear();
                 LatestMusic?.Clear();
-                RecentlyAdded?.Clear();
-                Recommended?.Clear();
+                RecommendedMovies?.Clear();
+                RecommendedShows?.Clear();
+                RecommendedMusic?.Clear();
                 NextUpItems?.Clear();
             });
 
@@ -617,8 +685,9 @@ namespace GelBox.ViewModels
                 HasLatestMovies = false;
                 HasLatestTVShows = false;
                 HasLatestMusic = false;
-                HasRecentlyAdded = false;
-                HasRecommended = false;
+                HasRecommendedMovies = false;
+                HasRecommendedShows = false;
+                HasRecommendedMusic = false;
                 HasNextUp = false;
             });
 
@@ -874,23 +943,14 @@ namespace GelBox.ViewModels
                 LatestMusic.CollectionChanged -= OnLatestMusicChanged;
             }
 
-            if (RecentlyAdded != null)
-            {
-                RecentlyAdded.CollectionChanged -= OnRecentlyAddedChanged;
-            }
-
-            if (Recommended != null)
-            {
-                Recommended.CollectionChanged -= OnRecommendedChanged;
-            }
-
             // Clear collections to free memory
             ContinueWatchingItems?.Clear();
             LatestMovies?.Clear();
             LatestTVShows?.Clear();
             LatestMusic?.Clear();
-            RecentlyAdded?.Clear();
-            Recommended?.Clear();
+            RecommendedMovies?.Clear();
+            RecommendedShows?.Clear();
+            RecommendedMusic?.Clear();
             NextUpItems?.Clear();
 
             base.DisposeManaged();
@@ -958,40 +1018,6 @@ namespace GelBox.ViewModels
             {
                 try
                 {
-                    await Task.CompletedTask;
-                }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
-        }
-
-        private void OnRecentlyAddedChanged(object sender, NotifyCollectionChangedEventArgs e)
-        {
-            var context = CreateErrorContext("RecentlyAddedChanged");
-            FireAndForget(async () =>
-            {
-                try
-                {
-                    // RecentlyAdded collection changed
-                    await Task.CompletedTask;
-                }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
-        }
-
-        private void OnRecommendedChanged(object sender, NotifyCollectionChangedEventArgs e)
-        {
-            var context = CreateErrorContext("RecommendedChanged");
-            FireAndForget(async () =>
-            {
-                try
-                {
-                    // Recommended collection changed
                     await Task.CompletedTask;
                 }
                 catch (Exception ex)

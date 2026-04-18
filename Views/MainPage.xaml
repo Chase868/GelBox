@@ -275,84 +275,130 @@
                     </ScrollViewer>
                 </Grid>
 
-                <!-- Recently Added Section -->
+                <!-- Movie Recommendations Section -->
                 <Grid Margin="{StaticResource SectionMargin}"
-                      Visibility="{x:Bind ViewModel.HasRecentlyAdded, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                      Visibility="{x:Bind ViewModel.HasRecommendedMovies, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="Recently Added"
+                               Text="Movie Recommendations"
                                Style="{StaticResource SectionHeaderTextStyle}"
                                Margin="{StaticResource ContentMargin}" />
 
-                    <GridView Grid.Row="1"
-                              ItemsSource="{x:Bind ViewModel.RecentlyAdded, Mode=OneWay}"
-                              SelectionMode="None"
-                              IsItemClickEnabled="True"
-                              ItemClick="GridView_ItemClick"
-                              ScrollViewer.HorizontalScrollBarVisibility="Hidden"
-                              ScrollViewer.HorizontalScrollMode="Auto"
-                              ScrollViewer.VerticalScrollMode="Disabled"
-                              ScrollViewer.IsHorizontalRailEnabled="True"
-                              TabNavigation="Once"
-                              XYFocusKeyboardNavigation="Enabled"
-
-                              Padding="0,0,24,0">
-                        <GridView.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <ItemsStackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </GridView.ItemsPanel>
-                        <GridView.ItemContainerStyle>
-                            <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
-                        </GridView.ItemContainerStyle>
-                        <GridView.ItemTemplate>
-                            <StaticResource ResourceKey="RecentlyAddedTemplate" />
-                        </GridView.ItemTemplate>
-                    </GridView>
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollMode="Disabled"
+                                  HorizontalScrollBarVisibility="Hidden">
+                        <GridView x:Name="RecommendedMoviesGrid"
+                                  ItemsSource="{x:Bind ViewModel.RecommendedMovies, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="GridView_ItemClick"
+                                  ScrollViewer.HorizontalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  Padding="0,0,24,0"
+                                  TabNavigation="Once"
+                                  XYFocusKeyboardNavigation="Enabled">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                            <GridView.ItemContainerStyle>
+                                <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <StaticResource ResourceKey="MoviePosterTemplate" />
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </ScrollViewer>
                 </Grid>
 
-                <!-- Recommended Section -->
+                <!-- TV Show Recommendations Section -->
                 <Grid Margin="{StaticResource SectionMargin}"
-                      Visibility="{x:Bind ViewModel.HasRecommended, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                      Visibility="{x:Bind ViewModel.HasRecommendedShows, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="Recommended for You"
+                               Text="TV Show Recommendations"
                                Style="{StaticResource SectionHeaderTextStyle}"
                                Margin="{StaticResource ContentMargin}" />
 
-                    <GridView Grid.Row="1"
-                              ItemsSource="{x:Bind ViewModel.Recommended, Mode=OneWay}"
-                              SelectionMode="None"
-                              IsItemClickEnabled="True"
-                              ItemClick="GridView_ItemClick"
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollMode="Disabled"
+                                  HorizontalScrollBarVisibility="Hidden">
+                        <GridView x:Name="RecommendedShowsGrid"
+                                  ItemsSource="{x:Bind ViewModel.RecommendedShows, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="GridView_ItemClick"
+                                  ScrollViewer.HorizontalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  Padding="0,0,24,0"
+                                  TabNavigation="Once"
+                                  XYFocusKeyboardNavigation="Enabled">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                            <GridView.ItemContainerStyle>
+                                <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <StaticResource ResourceKey="StandardPosterTemplate" />
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </ScrollViewer>
+                </Grid>
 
-                              ScrollViewer.HorizontalScrollBarVisibility="Hidden"
-                              ScrollViewer.HorizontalScrollMode="Auto"
-                              ScrollViewer.VerticalScrollMode="Disabled"
-                              ScrollViewer.IsHorizontalRailEnabled="True"
-                              TabNavigation="Once"
-                              XYFocusKeyboardNavigation="Enabled"
-                              Padding="0,0,24,0">
-                        <GridView.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <ItemsStackPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </GridView.ItemsPanel>
-                        <GridView.ItemContainerStyle>
-                            <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
-                        </GridView.ItemContainerStyle>
-                        <GridView.ItemTemplate>
-                            <StaticResource ResourceKey="StandardPosterTemplate" />
-                        </GridView.ItemTemplate>
-                    </GridView>
+                <!-- Music Recommendations Section -->
+                <Grid Margin="{StaticResource SectionMargin}"
+                      Visibility="{x:Bind ViewModel.HasRecommendedMusic, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Music Recommendations"
+                               Style="{StaticResource SectionHeaderTextStyle}"
+                               Margin="{StaticResource ContentMargin}" />
+
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollMode="Disabled"
+                                  HorizontalScrollBarVisibility="Hidden">
+                        <GridView x:Name="RecommendedMusicGrid"
+                                  ItemsSource="{x:Bind ViewModel.RecommendedMusic, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="GridView_ItemClick"
+                                  ScrollViewer.HorizontalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  Padding="0,0,24,0"
+                                  TabNavigation="Once"
+                                  XYFocusKeyboardNavigation="Enabled">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                            <GridView.ItemContainerStyle>
+                                <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <StaticResource ResourceKey="AlbumPosterTemplate" />
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </ScrollViewer>
                 </Grid>
             </ListView>
 
