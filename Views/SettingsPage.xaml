@@ -21,9 +21,24 @@
         <!-- Header -->
         <Grid Grid.Row="0"
               Height="64">
-            <TextBlock Text="Settings"
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    Content="&#xE72B;"
+                    FontFamily="Segoe MDL2 Assets"
+                    FontSize="16"
+                    Click="BackButton_Click"
+                    Background="Transparent"
+                    VerticalAlignment="Center"
+                    Margin="48,0,0,0"
+                    Padding="8"
+                    ToolTipService.ToolTip="Back" />
+            <TextBlock Grid.Column="1"
+                       Text="Settings"
                        Style="{StaticResource TitleTextStyle}"
-                       Margin="48,0,48,0"
+                       Margin="12,0,48,0"
                        VerticalAlignment="Center" />
         </Grid>
 

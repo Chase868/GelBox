@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using GelBox.ViewModels;
+using Windows.UI.Xaml;
 
 namespace GelBox.Views
 {
@@ -24,6 +25,11 @@ namespace GelBox.Views
         protected override async Task InitializePageAsync(object parameter)
         {
             await TypedViewModel.InitializeAsync();
+        }
+
+        private void BackButton_Click(object sender, RoutedEventArgs e)
+        {
+            NavigationService?.GoBack();
         }
     }
 }
