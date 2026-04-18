@@ -14,10 +14,10 @@
         <!-- Main content -->
         <StackPanel HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    MaxWidth="420">
+                    MaxWidth="560">
 
             <!-- Header -->
-            <Image Source="ms-appx:///Assets/StoreLogo.png" Width="120" Height="120"
+            <Image Source="ms-appx:///Assets/Square150x150Logo.png" Width="120" Height="120"
                    Margin="0,0,0,16" />
             <TextBlock Text="Welcome"
                        Style="{StaticResource TitleTextStyle}"

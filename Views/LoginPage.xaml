@@ -16,8 +16,12 @@
                       HorizontalScrollBarVisibility="Disabled">
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        MaxWidth="420"
-                        Margin="0,48,0,48">
+                        MaxWidth="560"
+                        Margin="48,48,48,48">
+
+                <!-- Logo -->
+                <Image Source="ms-appx:///Assets/Square150x150Logo.png" Width="100" Height="100"
+                       Margin="0,0,0,16" />
 
                 <!-- Header -->
                 <TextBlock Text="Sign In"

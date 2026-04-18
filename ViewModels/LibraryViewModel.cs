@@ -1522,8 +1522,7 @@ namespace GelBox.ViewModels
                 try
                 {
                     CurrentFilter = filter ?? "All";
-                    // Don't call ApplyFiltersAsync here - CurrentFilter setter already does it
-                    await Task.CompletedTask;
+                    await ApplyFiltersAsync();
                 }
                 catch (Exception ex)
                 {
