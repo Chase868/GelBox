@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using GelBox.Constants;
 using GelBox.Helpers;
 using GelBox.Views;
+using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Controls;
@@ -470,8 +471,96 @@ namespace GelBox.Services
                     pageType = typeof(CollectionDetailsPage);
                     break;
                 case BaseItemDto_Type.Playlist:
-                    pageType = typeof(CollectionDetailsPage);
-                    break;
+                    // Show play/shuffle dialog, then fetch and play playlist items
+                    FireAndForget(async () =>
+                    {
+                        try
+                        {
+                            var musicPlayerService = GetService<IMusicPlayerService>();
+                            var apiClient = GetService<JellyfinApiClient>();
+                            var userProfileService = GetService<IUserProfileService>();
+                            if (musicPlayerService == null || apiClient == null || userProfileService == null)
+                            {
+                                Logger.LogError("Required services not available for playlist playback");
+                                return;
+                            }
+
+                            // Ask user: Play or Shuffle
+                            bool shuffle = false;
+                            bool cancelled = false;
+                            await UIHelper.RunOnUIThreadAsync(async () =>
+                            {
+                                var dialog = new ContentDialog
+                                {
+                                    Title = item.Name ?? "Playlist",
+                                    Content = "How would you like to play this playlist?",
+                                    PrimaryButtonText = "Play",
+                                    SecondaryButtonText = "Shuffle",
+                                    CloseButtonText = "Cancel"
+                                };
+                                var result = await dialog.ShowAsync();
+                                if (result == ContentDialogResult.Secondary)
+                                {
+                                    shuffle = true;
+                                }
+                                else if (result == ContentDialogResult.None)
+                                {
+                                    cancelled = true;
+                                }
+                            }, logger: Logger);
+
+                            if (cancelled)
+                            {
+                                Logger.LogInformation($"Playlist '{item.Name}' playback cancelled by user");
+                                return;
+                            }
+
+                            var userId = userProfileService.CurrentUserId;
+                            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userIdGuid))
+                            {
+                                Logger.LogError("User ID not available for playlist playback");
+                                return;
+                            }
+
+                            Logger.LogInformation($"Loading playlist '{item.Name}' items (shuffle={shuffle})...");
+                            var response = await apiClient.Items.GetAsync(config =>
+                            {
+                                config.QueryParameters.ParentId = item.Id.Value;
+                                config.QueryParameters.UserId = userIdGuid;
+                                config.QueryParameters.SortBy = new[] { ItemSortBy.SortName };
+                            }).ConfigureAwait(false);
+
+                            if (response?.Items?.Any() == true)
+                            {
+                                var audioItems = response.Items
+                                    .Where(i => i.Type == BaseItemDto_Type.Audio)
+                                    .ToList();
+
+                                if (audioItems.Any())
+                                {
+                                    Logger.LogInformation($"Playing playlist '{item.Name}' with {audioItems.Count} tracks (shuffle={shuffle})");
+                                    await musicPlayerService.PlayItems(audioItems);
+                                    if (shuffle)
+                                    {
+                                        musicPlayerService.SetShuffle(true);
+                                    }
+                                }
+                                else
+                                {
+                                    Logger.LogWarning($"Playlist '{item.Name}' has no audio items");
+                                }
+                            }
+                            else
+                            {
+                                Logger.LogWarning($"Playlist '{item.Name}' is empty");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogError(ex, $"Error playing playlist '{item.Name}'");
+                        }
+                    }, "PlayPlaylist");
+                    return;
                 default:
                     Logger.LogWarning(
                         $"NavigateToItemDetails: Unknown item type '{item.Type}' for item '{item.Name}' (ID: {itemId}). No navigation action defined.");
