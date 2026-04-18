@@ -155,6 +155,7 @@ Direct play support for all common containers:
 |--------|--------|
 | **A** | Select/Confirm |
 | **B** | Back/Cancel |
+| **X** | Jump to Music Player controls |
 | **D-Pad/Left Stick** | Navigate UI |
 | **Right Trigger (Hold 0.5s)** | Jump to MiniPlayer |
 | **LB/RB** | Switch tabs (where applicable) |
@@ -187,14 +188,13 @@ Direct play support for all common containers:
 
 ### Unmapped Buttons
 The following buttons have no assigned functions during playback:
-- **X Button** - Not used
 - **Left/Right Shoulder (LB/RB)** - Not used during playback
 - **View Button** - Not used
 - **Menu Button** - Not used
 - **Left/Right Thumbstick Click** - Not used
 
 ### Music Playback
-Music playback uses standard system media controls. Use the Xbox Guide button to access media controls while music plays in the background.
+Music playback uses the persistent mini player at the bottom of the screen. Press **X** on the controller to instantly jump focus to the playback controls from any screen. Use the Xbox Guide button to access media controls while music plays in the background.
 
 ## System Requirements
 

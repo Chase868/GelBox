@@ -469,6 +469,9 @@ namespace GelBox.Services
                 case BaseItemDto_Type.BoxSet: // Collection of movies/shows
                     pageType = typeof(CollectionDetailsPage);
                     break;
+                case BaseItemDto_Type.Playlist:
+                    pageType = typeof(CollectionDetailsPage);
+                    break;
                 default:
                     Logger.LogWarning(
                         $"NavigateToItemDetails: Unknown item type '{item.Type}' for item '{item.Name}' (ID: {itemId}). No navigation action defined.");

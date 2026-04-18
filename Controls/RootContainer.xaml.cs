@@ -50,6 +50,17 @@ namespace GelBox.Controls
 
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // X button immediately jumps to music player controls
+            if (e.Key == VirtualKey.GamepadX)
+            {
+                if (MusicPlayer != null && MusicPlayer.Visibility == Visibility.Visible)
+                {
+                    MusicPlayer.FocusPlayPauseButton();
+                    e.Handled = true;
+                }
+                return;
+            }
+
             // Check for right trigger press
             if (e.Key == VirtualKey.GamepadRightTrigger && !_isRightTriggerDown)
             {

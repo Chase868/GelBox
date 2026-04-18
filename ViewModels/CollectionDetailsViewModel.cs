@@ -266,7 +266,8 @@ namespace GelBox.ViewModels
 
                             // Check if item is playable
                             if (item.Type == BaseItemDto_Type.Movie ||
-                                item.Type == BaseItemDto_Type.Episode)
+                                item.Type == BaseItemDto_Type.Episode ||
+                                item.Type == BaseItemDto_Type.Audio)
                             {
                                 _playableItems.Add(item);
                             }
