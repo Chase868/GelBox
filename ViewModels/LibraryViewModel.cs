@@ -1487,23 +1487,23 @@ namespace GelBox.ViewModels
                 case 0: // Name
                     sortBy = "SortName";
                     break;
-                case 1: // Date Added
+                case 1: // Album Artist
+                    sortBy = "AlbumArtist,SortName";
+                    break;
+                case 2: // Date Added
                     sortBy = "DateCreated";
                     break;
-                case 2: // Release Date
+                case 3: // Release Date
                     sortBy = "PremiereDate,ProductionYear,SortName";
                     break;
-                case 3: // Community Rating
+                case 4: // Community Rating
                     sortBy = "CommunityRating,SortName";
                     break;
-                case 4: // Critic Rating
+                case 5: // Critic Rating
                     sortBy = "CriticRating,SortName";
                     break;
-                case 5: // Random
+                case 6: // Random
                     sortBy = "Random";
-                    break;
-                case 6: // Album Artist
-                    sortBy = "AlbumArtist,SortName";
                     break;
             }
 

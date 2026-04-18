@@ -95,12 +95,12 @@
                               Style="{StaticResource LibraryHeaderComboBoxStyle}"
                               SelectedIndex="{x:Bind ViewModel.SelectedSortIndex, Mode=TwoWay}">
                         <ComboBoxItem Content="Name" />
+                        <ComboBoxItem Content="Album Artist" />
                         <ComboBoxItem Content="Date Added" />
                         <ComboBoxItem Content="Release Date" />
                         <ComboBoxItem Content="Community Rating" />
                         <ComboBoxItem Content="Critic Rating" />
                         <ComboBoxItem Content="Random" />
-                        <ComboBoxItem Content="Album Artist" />
                     </ComboBox>
 
                     <!-- Sort Order Button - WIDER -->
