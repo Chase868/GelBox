@@ -1009,8 +1009,8 @@ namespace GelBox.Services
         private void OnShuffleEnabledChangeRequested(SystemMediaTransportControls sender,
             ShuffleEnabledChangeRequestedEventArgs args)
         {
-            Logger.LogInformation("SMTC Shuffle change requested");
-            OnShuffleChangeRequested(this, !sender.ShuffleEnabled);
+            Logger.LogInformation($"SMTC Shuffle change requested: {args.RequestedShuffleEnabled}");
+            OnShuffleChangeRequested(this, args.RequestedShuffleEnabled);
         }
 
         private void OnAutoRepeatModeChangeRequested(SystemMediaTransportControls sender,

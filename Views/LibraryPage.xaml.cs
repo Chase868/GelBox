@@ -778,6 +778,7 @@ namespace GelBox.Views
                     {
                         var random = new Random();
                         var randomStart = random.Next(result.Items.Count);
+                        _musicPlayerService.SetShuffle(true);
                         await _musicPlayerService.PlayItems(result.Items.ToList(), randomStart).ConfigureAwait(false);
                     }
                     else
@@ -804,6 +805,7 @@ namespace GelBox.Views
                     if (_musicPlayerService != null)
                     {
                         var randomStart = random.Next(shuffledItems.Count);
+                        _musicPlayerService.SetShuffle(true);
                         await _musicPlayerService.PlayItems(shuffledItems, randomStart).ConfigureAwait(false);
                     }
                     else

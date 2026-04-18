@@ -377,8 +377,9 @@ namespace GelBox.ViewModels
                 var random = new Random();
                 var shuffledTracks = Tracks.OrderBy(x => random.Next()).ToList();
 
-                // Use MusicPlayerService for music playback
+                // Enable shuffle mode before setting queue
                 var randomStart = random.Next(shuffledTracks.Count);
+                _musicPlayerService.SetShuffle(true);
                 await _musicPlayerService.PlayItems(shuffledTracks, randomStart);
             }
             catch (Exception ex)
