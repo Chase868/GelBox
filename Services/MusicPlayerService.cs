@@ -876,6 +876,8 @@ namespace GelBox.Services
                 {
                     await UIHelper.RunOnUIThreadAsync(() =>
                     {
+                        if (_systemMediaTransportControls == null) return;
+
                         if (!_systemMediaTransportControls.IsEnabled)
                         {
                             _systemMediaTransportControls.IsEnabled = true;
@@ -909,6 +911,7 @@ namespace GelBox.Services
                 {
                     await UIHelper.RunOnUIThreadAsync(() =>
                     {
+                        if (_systemMediaTransportControls == null) return;
                         _systemMediaTransportControls.ShuffleEnabled = enabled;
                     }, logger: Logger).ConfigureAwait(false);
 
@@ -936,6 +939,7 @@ namespace GelBox.Services
                 {
                     await UIHelper.RunOnUIThreadAsync(() =>
                     {
+                        if (_systemMediaTransportControls == null) return;
                         _systemMediaTransportControls.AutoRepeatMode = mode switch
                         {
                             RepeatMode.None => MediaPlaybackAutoRepeatMode.None,
@@ -945,7 +949,7 @@ namespace GelBox.Services
                         };
                     }, logger: Logger).ConfigureAwait(false);
 
-                    Logger.LogInformation($"SMTC repeat mode set to: {_systemMediaTransportControls.AutoRepeatMode}");
+                    Logger.LogInformation($"SMTC repeat mode set to: {_systemMediaTransportControls?.AutoRepeatMode}");
                     await Task.CompletedTask;
                 }
                 catch (Exception ex)

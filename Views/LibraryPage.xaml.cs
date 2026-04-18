@@ -719,9 +719,11 @@ namespace GelBox.Views
             {
                 Logger.LogInformation("Shuffle button clicked for music library");
 
-                var hasArtists = ViewModel.MediaItems.Any(item => item.Type == BaseItemDto_Type.MusicArtist);
+                var hasNonAudioItems = ViewModel.MediaItems.Any(item =>
+                    item.Type == BaseItemDto_Type.MusicArtist ||
+                    item.Type == BaseItemDto_Type.MusicAlbum);
 
-                if (hasArtists)
+                if (hasNonAudioItems)
                 {
                     Logger.LogInformation("Getting all songs from music library for shuffle");
 
