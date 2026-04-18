@@ -50,6 +50,7 @@
             <SolidColorBrush x:Key="SystemControlBackgroundBaseMediumLowBrush"
                              Color="{StaticResource SystemBaseMediumLowColor}" />
             <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="{ThemeResource SystemAccentColor}" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="{ThemeResource SystemAccentColor}" />
             <SolidColorBrush x:Key="UnwatchedIndicatorBrush" Color="#1E88E5" />
             <SolidColorBrush x:Key="SystemControlBackgroundChromeMediumBrush"
                              Color="{StaticResource SystemChromeMediumColor}" />
@@ -373,6 +374,7 @@
             <Style x:Key="StandardSliderStyle" TargetType="Slider">
                 <Setter Property="Margin" Value="{StaticResource StandardControlMargin}" />
                 <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="Foreground" Value="{StaticResource SliderTrackValueFill}" />
             </Style>
 
             <Style x:Key="StandardToggleSwitchStyle" TargetType="ToggleSwitch">

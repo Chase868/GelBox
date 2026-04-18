@@ -293,6 +293,14 @@ namespace GelBox.Views
                     {
                         appAccentBrush.Color = NeutralAccentColor;
                     }
+                    if (resources.TryGetValue("SliderTrackValueFill", out var sliderObj) && sliderObj is SolidColorBrush sliderBrush)
+                    {
+                        if (!_originalAccentColor.HasValue)
+                        {
+                            _originalAccentColor = sliderBrush.Color;
+                        }
+                        sliderBrush.Color = NeutralAccentColor;
+                    }
                 }
                 else
                 {
@@ -311,6 +319,10 @@ namespace GelBox.Views
                         if (resources.TryGetValue("AppAccentBrush", out var appObj) && appObj is SolidColorBrush appAccentBrush)
                         {
                             appAccentBrush.Color = _originalAccentColor.Value;
+                        }
+                        if (resources.TryGetValue("SliderTrackValueFill", out var sliderObj) && sliderObj is SolidColorBrush sliderBrush)
+                        {
+                            sliderBrush.Color = _originalAccentColor.Value;
                         }
                     }
                 }

@@ -428,7 +428,7 @@
                     <Button x:Name="ShuffleButton"
                             Visibility="{x:Bind ViewModel.ShowShuffleButton, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            Width="110"
+                            Width="130"
                             Click="ShuffleButton_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                             <FontIcon Glyph="&#xE8B1;" FontSize="14" VerticalAlignment="Center" />

@@ -425,7 +425,6 @@ namespace GelBox.Services
                         var response = await _apiClient.Items.Suggestions.GetAsync(config =>
                         {
                             config.QueryParameters.UserId = userGuid;
-                            config.QueryParameters.MediaType = new[] { MediaType.Audio };
                             config.QueryParameters.Type = new[] { BaseItemKind.MusicAlbum };
                             config.QueryParameters.Limit = limit;
                         }, ct).ConfigureAwait(false);
@@ -605,18 +604,21 @@ namespace GelBox.Services
                             Logger?.LogError("SDK client not available");
                             return new List<BaseItemDto>();
                         }
-                        var response = await _apiClient.Items.Latest.GetAsync(config =>
+                        var response = await _apiClient.Items.GetAsync(config =>
                         {
                             config.QueryParameters.UserId = userIdGuid;
                             config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.MusicAlbum };
+                            config.QueryParameters.SortBy = new[] { ItemSortBy.DateCreated };
+                            config.QueryParameters.SortOrder = new[] { SortOrder.Descending };
                             config.QueryParameters.Limit = limit;
+                            config.QueryParameters.Recursive = true;
                             config.QueryParameters.Fields =
                                 DefaultItemFields;
                             config.QueryParameters.EnableImageTypes =
                                 DefaultImageTypes;
                         }, ct).ConfigureAwait(false);
 
-                        return response ?? new List<BaseItemDto>();
+                        return response?.Items ?? new List<BaseItemDto>();
                     }
                     catch (Exception ex)
                     {
