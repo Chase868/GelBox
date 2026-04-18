@@ -47,6 +47,10 @@ namespace GelBox.ViewModels
         private bool _enableVolumeNormalization = true;
         private bool _useAlbumGain = false;
         private double _lufsTarget = -16.0;
+        // Home screen settings
+        private bool _showMoviesOnHome = true;
+        private bool _showTVShowsOnHome = true;
+        private bool _showMusicOnHome = true;
 
         public PlaybackSettingsViewModel(
             ILogger<PlaybackSettingsViewModel> logger,
@@ -217,6 +221,11 @@ namespace GelBox.ViewModels
                 _useAlbumGain = appPrefs.UseAlbumGain;
                 _lufsTarget = appPrefs.LufsTarget;
 
+                // Home screen settings
+                _showMoviesOnHome = appPrefs.ShowMoviesOnHome;
+                _showTVShowsOnHome = appPrefs.ShowTVShowsOnHome;
+                _showMusicOnHome = appPrefs.ShowMusicOnHome;
+
                 // Notify all properties changed
                 OnPropertyChanged(nameof(AutoPlayNextEpisode));
                 OnPropertyChanged(nameof(PauseOnFocusLoss));
@@ -229,6 +238,9 @@ namespace GelBox.ViewModels
                 OnPropertyChanged(nameof(EnableVolumeNormalization));
                 OnPropertyChanged(nameof(UseAlbumGain));
                 OnPropertyChanged(nameof(LufsTarget));
+                OnPropertyChanged(nameof(ShowMoviesOnHome));
+                OnPropertyChanged(nameof(ShowTVShowsOnHome));
+                OnPropertyChanged(nameof(ShowMusicOnHome));
             });
         }
 
@@ -259,6 +271,9 @@ namespace GelBox.ViewModels
             EnableVolumeNormalization = true;
             UseAlbumGain = false;
             LufsTarget = -16.0;
+            ShowMoviesOnHome = true;
+            ShowTVShowsOnHome = true;
+            ShowMusicOnHome = true;
 
             await Task.CompletedTask;
         }
@@ -480,6 +495,52 @@ namespace GelBox.ViewModels
                     FireAndForget(
                         () => UpdateAppPreferenceAsync(prefs => prefs.LufsTarget = _lufsTarget,
                             nameof(LufsTarget)));
+                }
+            }
+        }
+
+        #endregion
+
+        #region Home Screen Settings Properties
+
+        public bool ShowMoviesOnHome
+        {
+            get => _showMoviesOnHome;
+            set
+            {
+                if (SetSettingProperty(ref _showMoviesOnHome, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.ShowMoviesOnHome = value,
+                            nameof(ShowMoviesOnHome)));
+                }
+            }
+        }
+
+        public bool ShowTVShowsOnHome
+        {
+            get => _showTVShowsOnHome;
+            set
+            {
+                if (SetSettingProperty(ref _showTVShowsOnHome, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.ShowTVShowsOnHome = value,
+                            nameof(ShowTVShowsOnHome)));
+                }
+            }
+        }
+
+        public bool ShowMusicOnHome
+        {
+            get => _showMusicOnHome;
+            set
+            {
+                if (SetSettingProperty(ref _showMusicOnHome, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.ShowMusicOnHome = value,
+                            nameof(ShowMusicOnHome)));
                 }
             }
         }

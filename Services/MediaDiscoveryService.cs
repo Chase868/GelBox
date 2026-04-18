@@ -453,6 +453,53 @@ namespace GelBox.Services
                 cancellationToken);
         }
 
+        public async Task<IEnumerable<BaseItemDto>> GetLatestMusicAsync(int limit = 0,
+            CancellationToken cancellationToken = default)
+        {
+            limit = ValidateLimit(limit);
+            if (limit > 100)
+            {
+                limit = 100;
+            }
+
+            return await GetCachedOrFetchAsync(
+                $"LatestMusic_{limit}",
+                async ct =>
+                {
+                    var context = CreateErrorContext("GetLatestMusic", ErrorCategory.Media);
+                    try
+                    {
+                        if (!TryGetUserIdGuid(out var userIdGuid))
+                        {
+                            return new List<BaseItemDto>();
+                        }
+
+                        if (_apiClient == null)
+                        {
+                            Logger?.LogError("SDK client not available");
+                            return new List<BaseItemDto>();
+                        }
+                        var response = await _apiClient.Items.Latest.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = userIdGuid;
+                            config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.MusicAlbum };
+                            config.QueryParameters.Limit = limit;
+                            config.QueryParameters.Fields =
+                                DefaultItemFields;
+                            config.QueryParameters.EnableImageTypes =
+                                DefaultImageTypes;
+                        }, ct).ConfigureAwait(false);
+
+                        return response ?? new List<BaseItemDto>();
+                    }
+                    catch (Exception ex)
+                    {
+                        return await ErrorHandler.HandleErrorAsync(ex, context, new List<BaseItemDto>());
+                    }
+                },
+                cancellationToken);
+        }
+
         public async Task<IEnumerable<BaseItemDto>> GetFavoriteItemsAsync(int limit = 0,
             CancellationToken cancellationToken = default)
         {

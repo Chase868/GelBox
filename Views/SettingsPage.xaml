@@ -134,6 +134,58 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Home Screen Settings -->
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
+                    <StackPanel x:Name="HomeScreenSettings">
+                        <TextBlock Text="Home Screen" Style="{StaticResource SectionHeaderTextStyle}" />
+
+                    <ToggleSwitch Header="Show Movies"
+                                  IsOn="{x:Bind TypedViewModel.PlaybackSettings.ShowMoviesOnHome, Mode=TwoWay}"
+                                  Style="{StaticResource StandardToggleSwitchStyle}" />
+                    <TextBlock
+                        Text="Show the Latest Movies section on the home screen."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
+                    <ToggleSwitch Header="Show TV Shows"
+                                  IsOn="{x:Bind TypedViewModel.PlaybackSettings.ShowTVShowsOnHome, Mode=TwoWay}"
+                                  Style="{StaticResource StandardToggleSwitchStyle}" />
+                    <TextBlock
+                        Text="Show the Latest TV Shows section on the home screen."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
+                    <ToggleSwitch Header="Show Music"
+                                  IsOn="{x:Bind TypedViewModel.PlaybackSettings.ShowMusicOnHome, Mode=TwoWay}"
+                                  Style="{StaticResource StandardToggleSwitchStyle}" />
+                    <TextBlock
+                        Text="Show the Latest Music section on the home screen."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.7"
+                        Margin="0,0,0,12"
+                        TextWrapping="Wrap"
+                        FontSize="12" />
+
+                    <TextBlock
+                        Text="Changes take effect after refreshing the home screen."
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Opacity="0.5"
+                        Margin="0,4,0,0"
+                        TextWrapping="Wrap"
+                        FontSize="12"
+                        FontStyle="Italic" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Playback Settings -->
                 <Border Background="{StaticResource CardBackgroundBrush}"
                         CornerRadius="{StaticResource MediumCornerRadius}"

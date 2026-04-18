@@ -335,6 +335,9 @@ namespace GelBox.Services
         Task<IEnumerable<BaseItemDto>> GetLatestShowsAsync(int limit = 20,
             CancellationToken cancellationToken = default);
 
+        Task<IEnumerable<BaseItemDto>> GetLatestMusicAsync(int limit = 20,
+            CancellationToken cancellationToken = default);
+
         Task<IEnumerable<BaseItemDto>> GetFavoriteItemsAsync(int limit = 20,
             CancellationToken cancellationToken = default);
 

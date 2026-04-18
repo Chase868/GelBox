@@ -233,6 +233,48 @@
                     </ScrollViewer>
                 </Grid>
 
+                <!-- Latest Music Section -->
+                <Grid Margin="{StaticResource SectionMargin}"
+                      Visibility="{x:Bind ViewModel.HasLatestMusic, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="Latest Music"
+                               Style="{StaticResource SectionHeaderTextStyle}"
+                               Margin="{StaticResource ContentMargin}" />
+
+                    <ScrollViewer Grid.Row="1"
+                                  HorizontalScrollMode="Enabled"
+                                  VerticalScrollMode="Disabled"
+                                  HorizontalScrollBarVisibility="Hidden">
+                        <GridView x:Name="LatestMusicGrid"
+                                  ItemsSource="{x:Bind ViewModel.LatestMusic, Mode=OneWay}"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="GridView_ItemClick"
+                                  ScrollViewer.HorizontalScrollMode="Disabled"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  Padding="0,0,24,0"
+                                  TabNavigation="Once"
+                                  XYFocusKeyboardNavigation="Enabled">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                            <GridView.ItemContainerStyle>
+                                <StaticResource ResourceKey="StandardMediaGridViewItemStyle" />
+                            </GridView.ItemContainerStyle>
+                            <GridView.ItemTemplate>
+                                <StaticResource ResourceKey="AlbumPosterTemplate" />
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </ScrollViewer>
+                </Grid>
+
                 <!-- Recently Added Section -->
                 <Grid Margin="{StaticResource SectionMargin}"
                       Visibility="{x:Bind ViewModel.HasRecentlyAdded, Mode=OneWay, FallbackValue=Collapsed, Converter={StaticResource BooleanToVisibilityConverter}}">

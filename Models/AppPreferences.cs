@@ -38,6 +38,11 @@ namespace GelBox.Models
         // === UI Settings ===
         public double TextSize { get; set; } = 14.0;
 
+        // === Home Screen Settings ===
+        public bool ShowMoviesOnHome { get; set; } = true;
+        public bool ShowTVShowsOnHome { get; set; } = true;
+        public bool ShowMusicOnHome { get; set; } = true;
+
         // === Connection Settings ===
         public int ConnectionTimeout { get; set; } = SystemConstants.DEFAULT_TIMEOUT_SECONDS;
         public bool IgnoreCertificateErrors { get; set; } = true;

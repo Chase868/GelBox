@@ -31,9 +31,11 @@ namespace GelBox.ViewModels
         private readonly ILogger<MainViewModel> _logger;
         private readonly IMediaDiscoveryService _mediaDiscoveryService;
         private readonly INavigationService _navigationService;
+        private readonly IPreferencesService _preferencesService;
         private readonly IUserProfileService _userProfileService;
         private bool _hasContinueWatching = false;
         private bool _hasLatestMovies = false;
+        private bool _hasLatestMusic = false;
         private bool _hasLatestTVShows = false;
         private bool _hasLoadedData = false;
         private bool _hasNextUp = false;
@@ -46,6 +48,7 @@ namespace GelBox.ViewModels
             JellyfinApiClient jellyfinApiClient,
             IUserProfileService userProfileService,
             ILogger<MainViewModel> logger,
+            IPreferencesService preferencesService,
             ICacheManagerService cacheManager = null)
             : base(logger)
         {
@@ -55,11 +58,13 @@ namespace GelBox.ViewModels
             _jellyfinApiClient = jellyfinApiClient ?? throw new ArgumentNullException(nameof(jellyfinApiClient));
             _userProfileService = userProfileService ?? throw new ArgumentNullException(nameof(userProfileService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
             _cacheManager = cacheManager;
 
             ContinueWatchingItems = new ObservableCollection<BaseItemDto>();
             LatestMovies = new ObservableCollection<BaseItemDto>();
             LatestTVShows = new ObservableCollection<BaseItemDto>();
+            LatestMusic = new ObservableCollection<BaseItemDto>();
             RecentlyAdded = new ObservableCollection<BaseItemDto>();
             Recommended = new ObservableCollection<BaseItemDto>();
             NextUpItems = new ObservableCollection<BaseItemDto>();
@@ -67,6 +72,7 @@ namespace GelBox.ViewModels
             HasContinueWatching = false;
             HasLatestMovies = false;
             HasLatestTVShows = false;
+            HasLatestMusic = false;
             HasRecentlyAdded = false;
             HasRecommended = false;
             HasNextUp = false;
@@ -76,6 +82,7 @@ namespace GelBox.ViewModels
             ContinueWatchingItems.CollectionChanged += OnContinueWatchingItemsChanged;
             LatestMovies.CollectionChanged += OnLatestMoviesChanged;
             LatestTVShows.CollectionChanged += OnLatestTVShowsChanged;
+            LatestMusic.CollectionChanged += OnLatestMusicChanged;
             RecentlyAdded.CollectionChanged += OnRecentlyAddedChanged;
             Recommended.CollectionChanged += OnRecommendedChanged;
 
@@ -120,6 +127,12 @@ namespace GelBox.ViewModels
             set => SetProperty(ref _hasRecommended, value);
         }
 
+        public bool HasLatestMusic
+        {
+            get => _hasLatestMusic;
+            set => SetProperty(ref _hasLatestMusic, value);
+        }
+
         public bool HasNextUp
         {
             get => _hasNextUp;
@@ -129,6 +142,7 @@ namespace GelBox.ViewModels
         public ObservableCollection<BaseItemDto> ContinueWatchingItems { get; }
         public ObservableCollection<BaseItemDto> LatestMovies { get; }
         public ObservableCollection<BaseItemDto> LatestTVShows { get; }
+        public ObservableCollection<BaseItemDto> LatestMusic { get; }
         public ObservableCollection<BaseItemDto> RecentlyAdded { get; }
         public ObservableCollection<BaseItemDto> Recommended { get; }
         public ObservableCollection<BaseItemDto> NextUpItems { get; }
@@ -168,6 +182,7 @@ namespace GelBox.ViewModels
                 ContinueWatchingItems?.Clear();
                 LatestMovies?.Clear();
                 LatestTVShows?.Clear();
+                LatestMusic?.Clear();
                 RecentlyAdded?.Clear();
                 Recommended?.Clear();
                 NextUpItems?.Clear();
@@ -175,6 +190,7 @@ namespace GelBox.ViewModels
                 HasContinueWatching = false;
                 HasLatestMovies = false;
                 HasLatestTVShows = false;
+                HasLatestMusic = false;
                 HasRecentlyAdded = false;
                 HasRecommended = false;
                 HasNextUp = false;
@@ -278,6 +294,12 @@ namespace GelBox.ViewModels
 
                 // Loading data for user
 
+                // Load home screen preferences
+                var appPrefs = await _preferencesService.GetAppPreferencesAsync().ConfigureAwait(false);
+                var showMovies = appPrefs.ShowMoviesOnHome;
+                var showTVShows = appPrefs.ShowTVShowsOnHome;
+                var showMusic = appPrefs.ShowMusicOnHome;
+
                 // Batch API calls into priority groups
                 // Priority 1: Continue Watching and Next Up (most important for user engagement)
                 var priority1Tasks = new List<Task<object>>(2); // Always 2 tasks
@@ -311,31 +333,55 @@ namespace GelBox.ViewModels
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Priority 2: Latest content
-                var priority2Tasks = new List<Task<object>>(3); // Always 3 tasks
+                var priority2Tasks = new List<Task<object>>();
+                Task<object> getLatestMoviesTask = null;
+                Task<object> getLatestShowsTask = null;
+                Task<object> getLatestMusicTask = null;
 
-                var getLatestMoviesTask = GetOrFetchCachedAsync(
-                    "LatestMovies",
-                    async () => await BaseService.RetryAsync(
-                        () => _mediaDiscoveryService.GetLatestMoviesAsync(20, cancellationToken),
-                        _logger,
-                        2,
-                        TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
-                        cancellationToken,
-                        nameof(_mediaDiscoveryService.GetLatestMoviesAsync)).ConfigureAwait(false),
-                    cancellationToken);
-                priority2Tasks.Add(getLatestMoviesTask);
+                if (showMovies)
+                {
+                    getLatestMoviesTask = GetOrFetchCachedAsync(
+                        "LatestMovies",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetLatestMoviesAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetLatestMoviesAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority2Tasks.Add(getLatestMoviesTask);
+                }
 
-                var getLatestShowsTask = GetOrFetchCachedAsync(
-                    "LatestShows",
-                    async () => await BaseService.RetryAsync(
-                        () => _mediaDiscoveryService.GetLatestShowsAsync(20, cancellationToken),
-                        _logger,
-                        2,
-                        TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
-                        cancellationToken,
-                        nameof(_mediaDiscoveryService.GetLatestShowsAsync)).ConfigureAwait(false),
-                    cancellationToken);
-                priority2Tasks.Add(getLatestShowsTask);
+                if (showTVShows)
+                {
+                    getLatestShowsTask = GetOrFetchCachedAsync(
+                        "LatestShows",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetLatestShowsAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetLatestShowsAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority2Tasks.Add(getLatestShowsTask);
+                }
+
+                if (showMusic)
+                {
+                    getLatestMusicTask = GetOrFetchCachedAsync(
+                        "LatestMusic",
+                        async () => await BaseService.RetryAsync(
+                            () => _mediaDiscoveryService.GetLatestMusicAsync(20, cancellationToken),
+                            _logger,
+                            2,
+                            TimeSpan.FromMilliseconds(RetryConstants.QUICK_CONNECT_POLL_DELAY_MS),
+                            cancellationToken,
+                            nameof(_mediaDiscoveryService.GetLatestMusicAsync)).ConfigureAwait(false),
+                        cancellationToken);
+                    priority2Tasks.Add(getLatestMusicTask);
+                }
 
                 var getRecentlyAddedTask = GetOrFetchCachedAsync(
                     "RecentlyAdded",
@@ -371,8 +417,9 @@ namespace GelBox.ViewModels
 
                 // Get results from completed tasks
                 var continueWatching = await getContinueWatchingTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
-                var latestMovies = await getLatestMoviesTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
-                var latestTVShows = await getLatestShowsTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
+                var latestMovies = getLatestMoviesTask != null ? await getLatestMoviesTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
+                var latestTVShows = getLatestShowsTask != null ? await getLatestShowsTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
+                var latestMusic = getLatestMusicTask != null ? await getLatestMusicTask.ConfigureAwait(false) as IEnumerable<BaseItemDto> : null;
                 var recentlyAdded = await getRecentlyAddedTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
                 var recommended = await getRecommendedTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
                 var nextUp = await getNextUpTask.ConfigureAwait(false) as IEnumerable<BaseItemDto>;
@@ -396,18 +443,44 @@ namespace GelBox.ViewModels
 
                         if (LatestMovies != null)
                         {
-                            LatestMovies.ReplaceAll(latestMovies ?? Enumerable.Empty<BaseItemDto>());
-                            HasLatestMovies = LatestMovies.Any();
-                            _logger?.LogInformation(
-                                $"Updated LatestMovies: {LatestMovies.Count} items, HasLatestMovies: {HasLatestMovies}");
+                            if (showMovies)
+                            {
+                                LatestMovies.ReplaceAll(latestMovies ?? Enumerable.Empty<BaseItemDto>());
+                                HasLatestMovies = LatestMovies.Any();
+                            }
+                            else
+                            {
+                                LatestMovies.Clear();
+                                HasLatestMovies = false;
+                            }
                         }
 
                         if (LatestTVShows != null)
                         {
-                            LatestTVShows.ReplaceAll(latestTVShows ?? Enumerable.Empty<BaseItemDto>());
-                            HasLatestTVShows = LatestTVShows.Any();
-                            _logger?.LogInformation(
-                                $"Updated LatestTVShows: {LatestTVShows.Count} items, HasLatestTVShows: {HasLatestTVShows}");
+                            if (showTVShows)
+                            {
+                                LatestTVShows.ReplaceAll(latestTVShows ?? Enumerable.Empty<BaseItemDto>());
+                                HasLatestTVShows = LatestTVShows.Any();
+                            }
+                            else
+                            {
+                                LatestTVShows.Clear();
+                                HasLatestTVShows = false;
+                            }
+                        }
+
+                        if (LatestMusic != null)
+                        {
+                            if (showMusic)
+                            {
+                                LatestMusic.ReplaceAll(latestMusic ?? Enumerable.Empty<BaseItemDto>());
+                                HasLatestMusic = LatestMusic.Any();
+                            }
+                            else
+                            {
+                                LatestMusic.Clear();
+                                HasLatestMusic = false;
+                            }
                         }
 
                         if (RecentlyAdded != null)
@@ -531,6 +604,7 @@ namespace GelBox.ViewModels
                 ContinueWatchingItems?.Clear();
                 LatestMovies?.Clear();
                 LatestTVShows?.Clear();
+                LatestMusic?.Clear();
                 RecentlyAdded?.Clear();
                 Recommended?.Clear();
                 NextUpItems?.Clear();
@@ -542,6 +616,7 @@ namespace GelBox.ViewModels
                 HasContinueWatching = false;
                 HasLatestMovies = false;
                 HasLatestTVShows = false;
+                HasLatestMusic = false;
                 HasRecentlyAdded = false;
                 HasRecommended = false;
                 HasNextUp = false;
@@ -794,6 +869,11 @@ namespace GelBox.ViewModels
                 LatestTVShows.CollectionChanged -= OnLatestTVShowsChanged;
             }
 
+            if (LatestMusic != null)
+            {
+                LatestMusic.CollectionChanged -= OnLatestMusicChanged;
+            }
+
             if (RecentlyAdded != null)
             {
                 RecentlyAdded.CollectionChanged -= OnRecentlyAddedChanged;
@@ -808,6 +888,7 @@ namespace GelBox.ViewModels
             ContinueWatchingItems?.Clear();
             LatestMovies?.Clear();
             LatestTVShows?.Clear();
+            LatestMusic?.Clear();
             RecentlyAdded?.Clear();
             Recommended?.Clear();
             NextUpItems?.Clear();
@@ -861,6 +942,22 @@ namespace GelBox.ViewModels
                 try
                 {
                     // LatestTVShows collection changed
+                    await Task.CompletedTask;
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            });
+        }
+
+        private void OnLatestMusicChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            var context = CreateErrorContext("LatestMusicChanged");
+            FireAndForget(async () =>
+            {
+                try
+                {
                     await Task.CompletedTask;
                 }
                 catch (Exception ex)
