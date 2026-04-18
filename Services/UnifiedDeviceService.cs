@@ -706,9 +706,9 @@ namespace GelBox.Services
 
                     // Not listed in Microsoft Xbox codec docs
                     _codecSupport["EAC3"] = false;
-                    _codecSupport["OPUS"] = false;
-                    _codecSupport["VORBIS"] = false;
-                    _codecSupport["OGG"] = false;
+                    _codecSupport["OPUS"] = true;
+                    _codecSupport["VORBIS"] = true;
+                    _codecSupport["OGG"] = true;
 
                     // Advanced audio codecs - not listed in MS docs, so conservative
                     _codecSupport["DTS"] = false; // DTS not officially listed
@@ -728,9 +728,9 @@ namespace GelBox.Services
                     _codecSupport["MP3"] = true;
                     _codecSupport["FLAC"] = true;
                     _codecSupport["PCM"] = true;
-                    _codecSupport["VORBIS"] = false;
-                    _codecSupport["OGG"] = false;
-                    _codecSupport["OPUS"] = false;
+                    _codecSupport["VORBIS"] = true;
+                    _codecSupport["OGG"] = true;
+                    _codecSupport["OPUS"] = true;
 
                     // Advanced audio codecs typically need specific hardware
                     _codecSupport["AC3"] = false;
@@ -1010,7 +1010,8 @@ namespace GelBox.Services
                 "flac",        // Free Lossless Audio Codec
                 "wma",         // Windows Media Audio
                 "wav",         // Waveform Audio
-                "alac"         // Apple Lossless
+                "alac",        // Apple Lossless
+                "ogg"          // Ogg container (Opus/Vorbis)
             });
         }
 
@@ -1099,7 +1100,9 @@ namespace GelBox.Services
                     "ms_adpcm",
                     "adpcm_ima",
                     "adpcm_ms",
-                    "mp2"
+                    "mp2",
+                    "opus",
+                    "vorbis"
                 });
 
                 return audioCodecs;
@@ -1118,6 +1121,16 @@ namespace GelBox.Services
             if (SupportsFLAC)
             {
                 audioCodecs.Add("flac");
+            }
+
+            if (SupportsOPUS)
+            {
+                audioCodecs.Add("opus");
+            }
+
+            if (SupportsOGG)
+            {
+                audioCodecs.Add("vorbis");
             }
 
             return audioCodecs;

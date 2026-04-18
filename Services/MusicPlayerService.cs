@@ -1485,7 +1485,7 @@ namespace GelBox.Services
                         // If container indicates a direct file format and server might return direct file
                         else if (!string.IsNullOrEmpty(mediaSource.Container))
                         {
-                            var directStreamContainers = new[] { "mp3", "m4a", "aac", "flac", "alac", "wav", "wma", "amr" };
+                            var directStreamContainers = new[] { "mp3", "m4a", "aac", "flac", "alac", "wav", "wma", "amr", "ogg" };
                             if (directStreamContainers.Contains(mediaSource.Container.ToLower()) &&
                                 mediaSource.SupportsDirectStream == true &&
                                 !mediaUrl.Contains("transcodingProtocol=hls"))

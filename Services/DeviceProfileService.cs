@@ -62,7 +62,7 @@ namespace GelBox.Services
                         ? "h264,avc1,avc3,hevc,hev1,hvc1,h265,vp8,vp80,vp9,vp90,vp09,av1,av01,mpeg4,mp4v,vc1,wvc1,mpeg1video,mpeg2video"
                         : "h264,avc1,avc3,hevc,hev1,hvc1,h265,vp8,vp80,vp9,vp90,vp09,mpeg4,mp4v,vc1,wvc1,mpeg1video,mpeg2video",
                     AudioCodec =
-                        "aac,mp4a,mp3,ac3,ac-3,flac,alac,pcm,lpcm,wma,wmap,g711,g711a,g711u,gsm,gsm610,ima_adpcm,ms_adpcm,adpcm_ima,adpcm_ms,amr,amrnb,mp2"
+                        "aac,mp4a,mp3,ac3,ac-3,flac,alac,pcm,lpcm,wma,wmap,g711,g711a,g711u,gsm,gsm610,ima_adpcm,ms_adpcm,adpcm_ima,adpcm_ms,amr,amrnb,mp2,opus,vorbis"
                 },
                 new DirectPlayProfile
                 {
@@ -92,7 +92,7 @@ namespace GelBox.Services
                 },
                 new DirectPlayProfile
                 {
-                    Container = "mp3,aac,m4a,flac,alac,wav,wma,amr", Type = DirectPlayProfile_Type.Audio
+                    Container = "mp3,aac,m4a,flac,alac,wav,wma,amr,ogg", Type = DirectPlayProfile_Type.Audio
                 },
                 new DirectPlayProfile { Container = "mp3", Type = DirectPlayProfile_Type.Audio, AudioCodec = "mp3" },
                 new DirectPlayProfile
@@ -100,7 +100,8 @@ namespace GelBox.Services
                     Container = "aac,m4a", Type = DirectPlayProfile_Type.Audio, AudioCodec = "aac"
                 },
                 new DirectPlayProfile { Container = "flac", Type = DirectPlayProfile_Type.Audio, AudioCodec = "flac" },
-                new DirectPlayProfile { Container = "wav", Type = DirectPlayProfile_Type.Audio, AudioCodec = "pcm" }
+                new DirectPlayProfile { Container = "wav", Type = DirectPlayProfile_Type.Audio, AudioCodec = "pcm" },
+                new DirectPlayProfile { Container = "ogg", Type = DirectPlayProfile_Type.Audio, AudioCodec = "opus,vorbis" }
             };
         }
 
