@@ -38,6 +38,9 @@ namespace GelBox.Models
         // === UI Settings ===
         public double TextSize { get; set; } = 14.0;
 
+        // === Appearance Settings ===
+        public bool EnableGradientBackground { get; set; } = true;
+
         // === Home Screen Settings ===
         public bool ShowMoviesOnHome { get; set; } = true;
         public bool ShowTVShowsOnHome { get; set; } = true;

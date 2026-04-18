@@ -47,6 +47,8 @@ namespace GelBox.ViewModels
         private bool _enableVolumeNormalization = true;
         private bool _useAlbumGain = false;
         private double _lufsTarget = -16.0;
+        // Appearance settings
+        private bool _enableGradientBackground = true;
         // Home screen settings
         private bool _showMoviesOnHome = true;
         private bool _showTVShowsOnHome = true;
@@ -221,6 +223,9 @@ namespace GelBox.ViewModels
                 _useAlbumGain = appPrefs.UseAlbumGain;
                 _lufsTarget = appPrefs.LufsTarget;
 
+                // Appearance settings
+                _enableGradientBackground = appPrefs.EnableGradientBackground;
+
                 // Home screen settings
                 _showMoviesOnHome = appPrefs.ShowMoviesOnHome;
                 _showTVShowsOnHome = appPrefs.ShowTVShowsOnHome;
@@ -238,6 +243,7 @@ namespace GelBox.ViewModels
                 OnPropertyChanged(nameof(EnableVolumeNormalization));
                 OnPropertyChanged(nameof(UseAlbumGain));
                 OnPropertyChanged(nameof(LufsTarget));
+                OnPropertyChanged(nameof(EnableGradientBackground));
                 OnPropertyChanged(nameof(ShowMoviesOnHome));
                 OnPropertyChanged(nameof(ShowTVShowsOnHome));
                 OnPropertyChanged(nameof(ShowMusicOnHome));
@@ -271,6 +277,7 @@ namespace GelBox.ViewModels
             EnableVolumeNormalization = true;
             UseAlbumGain = false;
             LufsTarget = -16.0;
+            EnableGradientBackground = true;
             ShowMoviesOnHome = true;
             ShowTVShowsOnHome = true;
             ShowMusicOnHome = true;
@@ -495,6 +502,24 @@ namespace GelBox.ViewModels
                     FireAndForget(
                         () => UpdateAppPreferenceAsync(prefs => prefs.LufsTarget = _lufsTarget,
                             nameof(LufsTarget)));
+                }
+            }
+        }
+
+        #endregion
+
+        #region Appearance Settings Properties
+
+        public bool EnableGradientBackground
+        {
+            get => _enableGradientBackground;
+            set
+            {
+                if (SetSettingProperty(ref _enableGradientBackground, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.EnableGradientBackground = value,
+                            nameof(EnableGradientBackground)));
                 }
             }
         }

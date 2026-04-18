@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
 namespace GelBox.Views
@@ -124,6 +125,16 @@ namespace GelBox.Views
             }
 
             Logger?.LogInformation($"{GetType().Name}: OnNavigatedTo called (Mode: {e.NavigationMode})");
+
+            // Apply gradient background based on preference
+            try
+            {
+                await ApplyBackgroundPreferenceAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogWarning(ex, "Failed to apply background preference");
+            }
 
             try
             {
@@ -241,6 +252,36 @@ namespace GelBox.Views
             {
                 Logger?.LogError(ex, $"Error in {GetType().Name}.OnPageUnloaded");
             }
+        }
+
+        #endregion
+
+        #region Background Preference
+
+        private async Task ApplyBackgroundPreferenceAsync()
+        {
+            if (PreferencesService == null) return;
+
+            var prefs = await PreferencesService.GetAppPreferencesAsync().ConfigureAwait(false);
+            var useGradient = prefs.EnableGradientBackground;
+
+            await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+            {
+                if (useGradient)
+                {
+                    if (Application.Current.Resources.TryGetValue("GradientPageBackgroundBrush", out var brush) && brush is Brush gradientBrush)
+                    {
+                        Background = gradientBrush;
+                    }
+                }
+                else
+                {
+                    if (Application.Current.Resources.TryGetValue("ApplicationPageBackgroundThemeBrush", out var brush) && brush is Brush solidBrush)
+                    {
+                        Background = solidBrush;
+                    }
+                }
+            });
         }
 
         #endregion

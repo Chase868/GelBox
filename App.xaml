@@ -28,6 +28,13 @@
             <Color x:Key="SurfaceStrokeColor">#15FFFFFF</Color>
             <Color x:Key="DividerColor">#12FFFFFF</Color>
 
+            <!-- Gradient Background Brush (matches logo green-to-blue) -->
+            <LinearGradientBrush x:Key="GradientPageBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#FF0D1F12" Offset="0.0" />
+                <GradientStop Color="#FF0B1520" Offset="0.5" />
+                <GradientStop Color="#FF0A1628" Offset="1.0" />
+            </LinearGradientBrush>
+
             <!-- Essential Brushes -->
             <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#0E0E0E" />
             <SolidColorBrush x:Key="SystemControlForegroundBaseHighBrush" Color="{StaticResource SystemBaseHighColor}" />
