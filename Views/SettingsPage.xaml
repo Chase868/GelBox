@@ -362,7 +362,10 @@
                 </Border>
 
                 <!-- About Section -->
-                <Border Style="{StaticResource SettingsSectionBorderStyle}">
+                <Border Background="{StaticResource CardBackgroundBrush}"
+                        CornerRadius="{StaticResource MediumCornerRadius}"
+                        Padding="20"
+                        Margin="0,0,0,8">
                     <StackPanel>
                         <TextBlock Text="About"
                                    Style="{StaticResource SubtitleTextBlockStyle}"

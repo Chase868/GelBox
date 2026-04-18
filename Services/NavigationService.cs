@@ -539,10 +539,16 @@ namespace GelBox.Services
                                 if (audioItems.Any())
                                 {
                                     Logger.LogInformation($"Playing playlist '{item.Name}' with {audioItems.Count} tracks (shuffle={shuffle})");
-                                    await musicPlayerService.PlayItems(audioItems);
                                     if (shuffle)
                                     {
+                                        var random = new Random();
+                                        var randomStart = random.Next(audioItems.Count);
                                         musicPlayerService.SetShuffle(true);
+                                        await musicPlayerService.PlayItems(audioItems, randomStart);
+                                    }
+                                    else
+                                    {
+                                        await musicPlayerService.PlayItems(audioItems);
                                     }
                                 }
                                 else
