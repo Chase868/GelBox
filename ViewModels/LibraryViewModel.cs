@@ -1394,11 +1394,11 @@ namespace GelBox.ViewModels
                     queryParams["includeItemTypes"] = "Series";
                     break;
                 case BaseItemDto_CollectionType.Music:
-                    // Default to Artists view for music libraries
-                    // This will be overridden by ApplyContentTypeFilterToParams if user selects Albums/Songs
-                    if (CurrentFilter == "All" || CurrentFilter == "Artists")
+                    // Default to Albums view for music libraries
+                    // This will be overridden by ApplyContentTypeFilterToParams if user selects Artists/Songs
+                    if (CurrentFilter == "All" || CurrentFilter == "Albums")
                     {
-                        queryParams["includeItemTypes"] = "MusicArtist";
+                        queryParams["includeItemTypes"] = "MusicAlbum";
                     }
 
                     break;
@@ -1437,8 +1437,8 @@ namespace GelBox.ViewModels
                         queryParams["includeItemTypes"] = "Audio";
                         break;
                     case "All":
-                        // For music, "All" defaults to Artists
-                        queryParams["includeItemTypes"] = "MusicArtist";
+                        // For music, "All" defaults to Albums
+                        queryParams["includeItemTypes"] = "MusicAlbum";
                         break;
                 }
             }
@@ -1501,6 +1501,9 @@ namespace GelBox.ViewModels
                     break;
                 case 5: // Random
                     sortBy = "Random";
+                    break;
+                case 6: // Album Artist
+                    sortBy = "AlbumArtist,SortName";
                     break;
             }
 

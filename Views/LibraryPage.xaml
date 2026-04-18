@@ -81,7 +81,7 @@
                               Height="32"
                               VerticalAlignment="Center"
                               SelectionChanged="MusicViewComboBox_SelectionChanged"
-                              SelectedIndex="0"
+                              SelectedIndex="1"
                               Style="{StaticResource LibraryHeaderComboBoxStyle}">
                         <ComboBoxItem Content="Artists" Tag="Artists" />
                         <ComboBoxItem Content="Albums" Tag="Albums" />
@@ -100,6 +100,7 @@
                         <ComboBoxItem Content="Community Rating" />
                         <ComboBoxItem Content="Critic Rating" />
                         <ComboBoxItem Content="Random" />
+                        <ComboBoxItem Content="Album Artist" />
                     </ComboBox>
 
                     <!-- Sort Order Button - WIDER -->
