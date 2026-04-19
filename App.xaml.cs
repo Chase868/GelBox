@@ -223,7 +223,7 @@ namespace GelBox
 
                 settings.Initialize(
                     BrandingConstants.APP_NAME,
-                    "1.0.1",
+                    "1.0.2",
                     deviceName,
                     deviceId
                 );

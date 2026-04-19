@@ -371,7 +371,7 @@
                                    Style="{StaticResource SubtitleTextBlockStyle}"
                                    Margin="0,0,0,12" />
 
-                        <TextBlock Text="GelBox v1.0.1"
+                        <TextBlock Text="GelBox v1.0.2"
                                    Style="{StaticResource BodyTextBlockStyle}"
                                    Margin="0,0,0,8" />
 
