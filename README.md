@@ -100,6 +100,8 @@ A native Jellyfin client for Xbox One and Xbox Series X|S consoles, built with U
 | **AMR-NB** | ✅ Direct Play | ✅ Full | Adaptive Multi-Rate (narrowband) |
 | **AC3 (DD)** | ✅ Direct Play | ✅ Full | Dolby Digital |
 | **MPEG-1/2 Audio** | ✅ Direct Play | ✅ Full | MP2 in MPEG containers |
+| **Opus** | ✅ Direct Play | ✅ Full | Modern lossy codec in OGG/WebM/MKV |
+| **Vorbis** | ✅ Direct Play | ✅ Full | OGG Vorbis |
 
 ## 4K Playback on Xbox
 
