@@ -970,6 +970,13 @@ namespace GelBox.ViewModels
                 Logger.LogInformation($"  {param.Key}: {param.Value}");
             }
 
+            // Use dedicated Artists endpoint for music artists — only returns artists with content
+            if (SelectedLibrary?.CollectionType == BaseItemDto_CollectionType.Music &&
+                CurrentFilter == "Artists")
+            {
+                return await FetchArtistsPageAsync(queryParams, cancellationToken);
+            }
+
             return await BaseService.RetryAsync(
                 async () =>
                 {
@@ -1135,6 +1142,94 @@ namespace GelBox.ViewModels
                 memberName: "GetItemsAsync");
         }
 
+        /// <summary>
+        /// Fetches artists via the dedicated /Artists endpoint, which only returns
+        /// artists that have associated content (songs/albums) in the library.
+        /// This replicates the pattern used in serve.py where artists are derived
+        /// from actual Audio items rather than querying MusicArtist entities directly.
+        /// </summary>
+        private async Task<BaseItemDtoQueryResult> FetchArtistsPageAsync(
+            Dictionary<string, string> queryParams, CancellationToken cancellationToken)
+        {
+            return await BaseService.RetryAsync(
+                async () =>
+                {
+                    var response = await _apiClient.Artists.GetAsync(config =>
+                    {
+                        if (queryParams.TryGetValue("userId", out var userId))
+                            config.QueryParameters.UserId = new Guid(userId);
+
+                        if (queryParams.TryGetValue("ParentId", out var parentId) ||
+                            queryParams.TryGetValue("parentId", out parentId))
+                            config.QueryParameters.ParentId = new Guid(parentId);
+
+                        if (queryParams.TryGetValue("startIndex", out var si) ||
+                            queryParams.TryGetValue("StartIndex", out si))
+                        {
+                            if (int.TryParse(si, out var startIdx))
+                                config.QueryParameters.StartIndex = startIdx;
+                        }
+
+                        if (queryParams.TryGetValue("limit", out var lim) ||
+                            queryParams.TryGetValue("Limit", out lim))
+                        {
+                            if (int.TryParse(lim, out var pageLimit))
+                                config.QueryParameters.Limit = pageLimit;
+                        }
+
+                        if (queryParams.TryGetValue("searchTerm", out var search) ||
+                            queryParams.TryGetValue("SearchTerm", out search))
+                            config.QueryParameters.SearchTerm = search;
+
+                        if (queryParams.TryGetValue("nameStartsWith", out var ns) ||
+                            queryParams.TryGetValue("NameStartsWith", out ns))
+                            config.QueryParameters.NameStartsWith = ns;
+
+                        if (queryParams.TryGetValue("genres", out var genres) ||
+                            queryParams.TryGetValue("Genres", out genres))
+                            config.QueryParameters.Genres = genres.Split(',');
+
+                        if (queryParams.TryGetValue("sortBy", out var sortBy) ||
+                            queryParams.TryGetValue("SortBy", out sortBy))
+                        {
+                            config.QueryParameters.SortBy = sortBy.Split(',').Select(s => s switch
+                            {
+                                "AlbumArtist" => ItemSortBy.AlbumArtist,
+                                "Artist" => ItemSortBy.Artist,
+                                "CommunityRating" => ItemSortBy.CommunityRating,
+                                "CriticRating" => ItemSortBy.CriticRating,
+                                "DateCreated" => ItemSortBy.DateCreated,
+                                "PremiereDate" => ItemSortBy.PremiereDate,
+                                "Random" => ItemSortBy.Random,
+                                "SortName" => ItemSortBy.SortName,
+                                _ => ItemSortBy.SortName
+                            }).ToArray();
+                        }
+
+                        if (queryParams.TryGetValue("sortOrder", out var sortOrder) ||
+                            queryParams.TryGetValue("SortOrder", out sortOrder))
+                        {
+                            config.QueryParameters.SortOrder = sortOrder.Split(',')
+                                .Select(o => o == "Ascending" ? SortOrder.Ascending : SortOrder.Descending)
+                                .ToArray();
+                        }
+
+                        config.QueryParameters.Fields = new[]
+                        {
+                            ItemFields.Overview, ItemFields.PrimaryImageAspectRatio,
+                            ItemFields.ChildCount, ItemFields.DateCreated
+                        };
+                        config.QueryParameters.EnableImageTypes =
+                            new[] { ImageType.Primary, ImageType.Banner, ImageType.Thumb };
+                    }, cancellationToken).ConfigureAwait(false);
+                    return response;
+                },
+                Logger,
+                RetryConstants.DEFAULT_API_RETRY_ATTEMPTS,
+                TimeSpan.FromMilliseconds(RetryConstants.INITIAL_RETRY_DELAY_MS),
+                memberName: "GetArtistsAsync");
+        }
+
         public async Task ApplyFiltersAsync(bool isFullRefresh = true)
         {
             var cancelContext = CreateErrorContext("CancelPreviousFilter");
@@ -1195,16 +1290,9 @@ namespace GelBox.ViewModels
                 var newItems = result?.Items?.ToList() ?? new List<BaseItemDto>();
                 var fetchedCount = newItems.Count;
 
-                // Filter out artists with no songs
-                if (SelectedLibrary?.CollectionType == BaseItemDto_CollectionType.Music &&
-                    CurrentFilter == "Artists")
-                {
-                    newItems = newItems.Where(item => item != null && item.ChildCount.GetValueOrDefault(0) > 0).ToList();
-                }
-
                 // Log the API response
                 Logger.LogInformation(
-                    $"Filter API Response: Received {fetchedCount} items (filtered to {newItems.Count}), TotalRecordCount: {result?.TotalRecordCount}");
+                    $"Filter API Response: Received {fetchedCount} items, TotalRecordCount: {result?.TotalRecordCount}");
 
                 if (newItems.Any())
                 {
