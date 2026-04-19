@@ -1193,10 +1193,18 @@ namespace GelBox.ViewModels
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var newItems = result?.Items?.ToList() ?? new List<BaseItemDto>();
+                var fetchedCount = newItems.Count;
+
+                // Filter out artists with no songs
+                if (SelectedLibrary?.CollectionType == BaseItemDto_CollectionType.Music &&
+                    CurrentFilter == "Artists")
+                {
+                    newItems = newItems.Where(item => item != null && item.ChildCount.GetValueOrDefault(0) > 0).ToList();
+                }
 
                 // Log the API response
                 Logger.LogInformation(
-                    $"Filter API Response: Received {newItems.Count} items, TotalRecordCount: {result?.TotalRecordCount}");
+                    $"Filter API Response: Received {fetchedCount} items (filtered to {newItems.Count}), TotalRecordCount: {result?.TotalRecordCount}");
 
                 if (newItems.Any())
                 {
@@ -1230,11 +1238,11 @@ namespace GelBox.ViewModels
                             Logger?.LogError("MediaItems collection is null");
                         }
                     });
-                    _currentStartIndex += newItems.Count;
+                    _currentStartIndex += fetchedCount;
 
                     await RunOnUIThreadAsync(() =>
                     {
-                        HasMoreItems = newItems.Count == PageSize;
+                        HasMoreItems = fetchedCount == PageSize;
                         if (isFullRefresh)
                         {
                             TotalItemCount = result?.TotalRecordCount ?? newItems.Count;
