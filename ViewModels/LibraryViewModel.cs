@@ -1143,18 +1143,18 @@ namespace GelBox.ViewModels
         }
 
         /// <summary>
-        /// Fetches artists via the dedicated /Artists endpoint, which only returns
-        /// artists that have associated content (songs/albums) in the library.
-        /// This replicates the pattern used in serve.py where artists are derived
-        /// from actual Audio items rather than querying MusicArtist entities directly.
+        /// Fetches album artists via the dedicated /Artists/AlbumArtists endpoint,
+        /// which only returns primary (album) artists — not featured artists.
+        /// Results are deduplicated case-insensitively to merge entries like
+        /// "Against The Current" and "Against the Current".
         /// </summary>
         private async Task<BaseItemDtoQueryResult> FetchArtistsPageAsync(
             Dictionary<string, string> queryParams, CancellationToken cancellationToken)
         {
-            return await BaseService.RetryAsync(
+            var result = await BaseService.RetryAsync(
                 async () =>
                 {
-                    var response = await _apiClient.Artists.GetAsync(config =>
+                    var response = await _apiClient.Artists.AlbumArtists.GetAsync(config =>
                     {
                         if (queryParams.TryGetValue("userId", out var userId))
                             config.QueryParameters.UserId = new Guid(userId);
@@ -1164,8 +1164,7 @@ namespace GelBox.ViewModels
                             config.QueryParameters.ParentId = new Guid(parentId);
 
                         // Don't set StartIndex/Limit — fetch all artists at once
-                        // since the Artists endpoint correctly respects pagination
-                        // but there's no incremental loading wired up in the view
+                        // since there's no incremental loading wired up in the view
 
                         if (queryParams.TryGetValue("searchTerm", out var search) ||
                             queryParams.TryGetValue("SearchTerm", out search))
@@ -1217,7 +1216,34 @@ namespace GelBox.ViewModels
                 Logger,
                 RetryConstants.DEFAULT_API_RETRY_ATTEMPTS,
                 TimeSpan.FromMilliseconds(RetryConstants.INITIAL_RETRY_DELAY_MS),
-                memberName: "GetArtistsAsync");
+                memberName: "GetAlbumArtistsAsync");
+
+            // Deduplicate artists with case-insensitive name matching
+            // e.g. "Against The Current" and "Against the Current" → keep the first occurrence
+            if (result?.Items != null)
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var deduplicated = new List<BaseItemDto>();
+                foreach (var item in result.Items)
+                {
+                    var name = item?.Name?.Trim() ?? "";
+                    if (seen.Add(name))
+                    {
+                        deduplicated.Add(item);
+                    }
+                }
+
+                if (deduplicated.Count < result.Items.Count)
+                {
+                    Logger.LogInformation(
+                        $"Deduplicated artists: {result.Items.Count} → {deduplicated.Count}");
+                }
+
+                result.Items = deduplicated;
+                result.TotalRecordCount = deduplicated.Count;
+            }
+
+            return result;
         }
 
         public async Task ApplyFiltersAsync(bool isFullRefresh = true)
@@ -1323,7 +1349,9 @@ namespace GelBox.ViewModels
                         HasMoreItems = fetchedCount == PageSize;
                         if (isFullRefresh)
                         {
-                            TotalItemCount = result?.TotalRecordCount ?? newItems.Count;
+                            TotalItemCount = result?.TotalRecordCount > 0
+                                ? result.TotalRecordCount.Value
+                                : newItems.Count;
                         }
                         else if (result?.TotalRecordCount.HasValue == true)
                         {
