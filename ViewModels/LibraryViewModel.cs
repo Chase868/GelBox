@@ -1163,19 +1163,9 @@ namespace GelBox.ViewModels
                             queryParams.TryGetValue("parentId", out parentId))
                             config.QueryParameters.ParentId = new Guid(parentId);
 
-                        if (queryParams.TryGetValue("startIndex", out var si) ||
-                            queryParams.TryGetValue("StartIndex", out si))
-                        {
-                            if (int.TryParse(si, out var startIdx))
-                                config.QueryParameters.StartIndex = startIdx;
-                        }
-
-                        if (queryParams.TryGetValue("limit", out var lim) ||
-                            queryParams.TryGetValue("Limit", out lim))
-                        {
-                            if (int.TryParse(lim, out var pageLimit))
-                                config.QueryParameters.Limit = pageLimit;
-                        }
+                        // Don't set StartIndex/Limit — fetch all artists at once
+                        // since the Artists endpoint correctly respects pagination
+                        // but there's no incremental loading wired up in the view
 
                         if (queryParams.TryGetValue("searchTerm", out var search) ||
                             queryParams.TryGetValue("SearchTerm", out search))
