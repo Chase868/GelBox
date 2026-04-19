@@ -1143,14 +1143,64 @@ namespace GelBox.ViewModels
         }
 
         /// <summary>
-        /// Fetches album artists via the dedicated /Artists/AlbumArtists endpoint,
-        /// which only returns primary (album) artists — not featured artists.
-        /// Results are deduplicated case-insensitively to merge entries like
-        /// "Against The Current" and "Against the Current".
+        /// Fetches primary album artists only, replicating the serve.py pattern:
+        /// 1. Query all MusicAlbum items to get their primary AlbumArtist field
+        /// 2. Build a case-insensitive set of those names
+        /// 3. Query artist entities from the AlbumArtists endpoint
+        /// 4. Filter to only artists whose name appears in the album-derived set
+        /// This excludes featured/guest artists who appear in AlbumArtists arrays
+        /// but are never the primary AlbumArtist on any album.
         /// </summary>
         private async Task<BaseItemDtoQueryResult> FetchArtistsPageAsync(
             Dictionary<string, string> queryParams, CancellationToken cancellationToken)
         {
+            // Step 1: Fetch all albums to get primary AlbumArtist names
+            var primaryArtistNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var albumResult = await BaseService.RetryAsync(
+                    async () =>
+                    {
+                        return await _apiClient.Items.GetAsync(config =>
+                        {
+                            if (queryParams.TryGetValue("userId", out var uid))
+                                config.QueryParameters.UserId = new Guid(uid);
+                            if (queryParams.TryGetValue("ParentId", out var pid) ||
+                                queryParams.TryGetValue("parentId", out pid))
+                                config.QueryParameters.ParentId = new Guid(pid);
+
+                            config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.MusicAlbum };
+                            config.QueryParameters.Recursive = true;
+                            config.QueryParameters.Fields = new[] { ItemFields.Overview };
+                            config.QueryParameters.EnableImageTypes = new ImageType[] { };
+                            config.QueryParameters.Limit = 10000;
+                        }, cancellationToken).ConfigureAwait(false);
+                    },
+                    Logger,
+                    RetryConstants.DEFAULT_API_RETRY_ATTEMPTS,
+                    TimeSpan.FromMilliseconds(RetryConstants.INITIAL_RETRY_DELAY_MS),
+                    memberName: "GetAlbumsForArtistFilter");
+
+                if (albumResult?.Items != null)
+                {
+                    foreach (var album in albumResult.Items)
+                    {
+                        var artistName = album?.AlbumArtist?.Trim();
+                        if (!string.IsNullOrEmpty(artistName))
+                        {
+                            primaryArtistNames.Add(artistName);
+                        }
+                    }
+                }
+
+                Logger.LogInformation($"Found {primaryArtistNames.Count} unique primary album artists from {albumResult?.Items?.Count ?? 0} albums");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to fetch albums for artist filtering, showing all artists");
+            }
+
+            // Step 2: Fetch artist entities
             var result = await BaseService.RetryAsync(
                 async () =>
                 {
@@ -1162,9 +1212,6 @@ namespace GelBox.ViewModels
                         if (queryParams.TryGetValue("ParentId", out var parentId) ||
                             queryParams.TryGetValue("parentId", out parentId))
                             config.QueryParameters.ParentId = new Guid(parentId);
-
-                        // Don't set StartIndex/Limit — fetch all artists at once
-                        // since there's no incremental loading wired up in the view
 
                         if (queryParams.TryGetValue("searchTerm", out var search) ||
                             queryParams.TryGetValue("SearchTerm", out search))
@@ -1218,29 +1265,30 @@ namespace GelBox.ViewModels
                 TimeSpan.FromMilliseconds(RetryConstants.INITIAL_RETRY_DELAY_MS),
                 memberName: "GetAlbumArtistsAsync");
 
-            // Deduplicate artists with case-insensitive name matching
-            // e.g. "Against The Current" and "Against the Current" → keep the first occurrence
+            // Step 3: Filter to primary artists only + deduplicate case-insensitively
             if (result?.Items != null)
             {
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var deduplicated = new List<BaseItemDto>();
+                var filtered = new List<BaseItemDto>();
                 foreach (var item in result.Items)
                 {
                     var name = item?.Name?.Trim() ?? "";
-                    if (seen.Add(name))
+                    // Only include if this artist is a primary AlbumArtist on at least one album
+                    // and we haven't already included a case-variant of this name
+                    if (primaryArtistNames.Count == 0 || primaryArtistNames.Contains(name))
                     {
-                        deduplicated.Add(item);
+                        if (seen.Add(name))
+                        {
+                            filtered.Add(item);
+                        }
                     }
                 }
 
-                if (deduplicated.Count < result.Items.Count)
-                {
-                    Logger.LogInformation(
-                        $"Deduplicated artists: {result.Items.Count} → {deduplicated.Count}");
-                }
+                Logger.LogInformation(
+                    $"Artist filtering: {result.Items.Count} from API → {filtered.Count} after primary-only + dedup");
 
-                result.Items = deduplicated;
-                result.TotalRecordCount = deduplicated.Count;
+                result.Items = filtered;
+                result.TotalRecordCount = filtered.Count;
             }
 
             return result;
