@@ -34,6 +34,8 @@ namespace GelBox
 {
     public sealed partial class App : Application
     {
+        private const string MusicQueueStateKey = "MusicQueueState";
+
         private sealed class QueueItemSnapshot
         {
             public string Id { get; set; }
@@ -1077,6 +1079,7 @@ namespace GelBox
             var deferral = e.SuspendingOperation.GetDeferral();
             try
             {
+                await SaveMusicQueueStateAsync();
                 await SaveApplicationStateAsync();
             }
             catch (Exception ex)
@@ -1130,6 +1133,7 @@ namespace GelBox
                 if (!IsMusicPlaying())
                 {
                     _logger?.LogInformation("No music playing - saving state and exiting for background transition");
+                    await SaveMusicQueueStateAsync();
                     await SaveApplicationStateAsync();
                     await ExitAppAsync();
                 }
@@ -1328,6 +1332,7 @@ namespace GelBox
                 try
                 {
                     await Task.Delay(500).ConfigureAwait(false);
+                    await SaveMusicQueueStateAsync().ConfigureAwait(false);
                     await SaveApplicationStateAsync().ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -1339,6 +1344,45 @@ namespace GelBox
                     _stateSavePending = false;
                 }
             });
+        }
+
+        private async Task SaveMusicQueueStateAsync()
+        {
+            try
+            {
+                var preferencesService = GetService<IPreferencesService>();
+                var musicPlayerService = GetService<IMusicPlayerService>();
+
+                if (preferencesService == null || musicPlayerService == null)
+                {
+                    return;
+                }
+
+                var queue = musicPlayerService.Queue ?? new List<BaseItemDto>();
+                var snapshot = new MusicQueueStateSnapshot
+                {
+                    CurrentIndex = musicPlayerService.CurrentQueueIndex,
+                    IsShuffled = musicPlayerService.IsShuffleMode,
+                    ItemIds = queue.Where(q => q?.Id.HasValue == true).Select(q => q.Id.Value.ToString()).ToList(),
+                    Items = queue
+                        .Where(q => q != null && q.Id.HasValue)
+                        .Select(q => new QueueItemSnapshot
+                        {
+                            Id = q.Id.Value.ToString(),
+                            Name = q.Name,
+                            Type = q.Type,
+                            MediaType = q.MediaType,
+                            AlbumArtist = q.AlbumArtist
+                        })
+                        .ToList()
+                };
+
+                await preferencesService.SaveAsync(MusicQueueStateKey, snapshot).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to save dedicated music queue state");
+            }
         }
 
         private async Task RestoreMusicQueueStateAsync()
@@ -1366,9 +1410,18 @@ namespace GelBox
                     return;
                 }
 
+                var dedicatedQueueState = await preferencesService.LoadAsync<MusicQueueStateSnapshot>(MusicQueueStateKey)
+                    .ConfigureAwait(false);
                 var appState = await preferencesService.LoadAsync<AppStateSnapshot>(PreferenceConstants.AppState)
                     .ConfigureAwait(false);
-                if (appState?.MusicQueueState?.ItemIds == null || !appState.MusicQueueState.ItemIds.Any())
+
+                var queueState = dedicatedQueueState;
+                if (queueState?.ItemIds == null || !queueState.ItemIds.Any())
+                {
+                    queueState = appState?.MusicQueueState;
+                }
+
+                if (queueState?.ItemIds == null || !queueState.ItemIds.Any())
                 {
                     return;
                 }
@@ -1376,9 +1429,9 @@ namespace GelBox
                 var restoredQueue = new List<BaseItemDto>();
 
                 // Preferred restore path: use locally persisted lightweight queue item snapshots.
-                if (appState.MusicQueueState.Items != null && appState.MusicQueueState.Items.Any())
+                if (queueState.Items != null && queueState.Items.Any())
                 {
-                    foreach (var snapshot in appState.MusicQueueState.Items)
+                    foreach (var snapshot in queueState.Items)
                     {
                         if (Guid.TryParse(snapshot?.Id, out var parsedId))
                         {
@@ -1398,7 +1451,7 @@ namespace GelBox
                 if (!restoredQueue.Any())
                 {
                     var ids = new List<Guid>();
-                    foreach (var idString in appState.MusicQueueState.ItemIds)
+                    foreach (var idString in queueState.ItemIds)
                     {
                         if (Guid.TryParse(idString, out var guid))
                         {
@@ -1428,12 +1481,17 @@ namespace GelBox
                     return;
                 }
 
-                var currentIndex = appState.MusicQueueState.CurrentIndex;
-                var isShuffled = appState.MusicQueueState.IsShuffled;
+                var currentIndex = queueState.CurrentIndex;
+                var isShuffled = queueState.IsShuffled;
 
                 currentIndex = Math.Max(0, Math.Min(currentIndex, restoredQueue.Count - 1));
                 musicPlayerService.SetQueue(restoredQueue, currentIndex);
                 musicPlayerService.SetShuffle(isShuffled);
+
+                if (appState?.PlaybackState?.IsPlaying == true)
+                {
+                    musicPlayerService.PlayQueueItemAt(currentIndex);
+                }
 
                 _logger?.LogInformation($"Restored music queue with {restoredQueue.Count} items at index {currentIndex}");
             }
