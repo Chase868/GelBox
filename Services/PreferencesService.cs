@@ -15,6 +15,8 @@ namespace GelBox.Services
 {
     public class PreferencesService : BaseService, IPreferencesService
     {
+        private const int MaxSettingsValueLength = 7000;
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             Converters = { new JsonStringEnumConverter() },
@@ -186,7 +188,29 @@ namespace GelBox.Services
 
                 if (IsXboxEnvironment)
                 {
-                    SetValue(key, json);
+                    // Avoid state manager per-value limits for large payloads.
+                    if (!string.IsNullOrEmpty(json) && json.Length <= MaxSettingsValueLength)
+                    {
+                        SetValue(key, json);
+                    }
+                    else
+                    {
+                        EnsureApplicationDataLoaded();
+                        var file = await _localFolder
+                            .CreateFileAsync($"{key}.json", CreationCollisionOption.ReplaceExisting).AsTask()
+                            .ConfigureAwait(false);
+                        await FileIO.WriteTextAsync(file, json).AsTask().ConfigureAwait(false);
+
+                        // Remove potentially stale settings value for this key.
+                        try
+                        {
+                            RemoveValue(key);
+                        }
+                        catch
+                        {
+                            // Ignore cleanup failures here.
+                        }
+                    }
                 }
                 else
                 {

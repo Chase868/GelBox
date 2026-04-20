@@ -34,6 +34,28 @@ namespace GelBox
 {
     public sealed partial class App : Application
     {
+        private sealed class PlaybackStateSnapshot
+        {
+            public string ItemId { get; set; }
+            public string Position { get; set; }
+            public bool IsPlaying { get; set; }
+        }
+
+        private sealed class MusicQueueStateSnapshot
+        {
+            public List<string> ItemIds { get; set; } = new();
+            public int CurrentIndex { get; set; }
+            public bool IsShuffled { get; set; }
+        }
+
+        private sealed class AppStateSnapshot
+        {
+            public string CurrentPage { get; set; }
+            public bool WasPlayingVideo { get; set; }
+            public PlaybackStateSnapshot PlaybackState { get; set; }
+            public MusicQueueStateSnapshot MusicQueueState { get; set; }
+        }
+
         private IAuthenticationService _authService;
         private IUnifiedDeviceService _deviceInfo;
         private ILogger<App> _logger;
@@ -1162,23 +1184,23 @@ namespace GelBox
                 logger: _logger);
         }
 
-        private Task SaveApplicationStateAsync()
+        private async Task SaveApplicationStateAsync()
         {
             try
             {
-                var state = new Dictionary<string, object>();
+                var state = new AppStateSnapshot();
                 var preferencesService = GetService<IPreferencesService>();
                 if (preferencesService == null)
                 {
                     _logger?.LogWarning("PreferencesService unavailable - skipping app state save");
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 var rootFrame = GetRootFrame();
                 if (rootFrame != null)
                 {
                     // Only save the current page type, not the full back stack
-                    state["CurrentPage"] = rootFrame.Content?.GetType().Name;
+                    state.CurrentPage = rootFrame.Content?.GetType().Name;
 
                     // Check if we're currently on the MediaPlayerPage (video playback)
                     if (rootFrame.Content is MediaPlayerPage)
@@ -1186,20 +1208,19 @@ namespace GelBox
                         _logger?.LogInformation("Saving state while video is playing - video will be paused");
                         // The MediaPlayerPage window deactivation handler will pause the video
                         // We just need to save the state that we were on this page
-                        state["WasPlayingVideo"] = true;
+                        state.WasPlayingVideo = true;
                     }
                 }
 
                 var musicPlayerService = GetService<IMusicPlayerService>();
                 if (musicPlayerService?.IsPlaying == true)
                 {
-                    var playbackState = new Dictionary<string, object>
+                    state.PlaybackState = new PlaybackStateSnapshot
                     {
-                        ["ItemId"] = musicPlayerService.CurrentItem?.Id?.ToString(),
-                        ["Position"] = musicPlayerService.MediaPlayer?.PlaybackSession?.Position.ToString(),
-                        ["IsPlaying"] = musicPlayerService.IsPlaying
+                        ItemId = musicPlayerService.CurrentItem?.Id?.ToString(),
+                        Position = musicPlayerService.MediaPlayer?.PlaybackSession?.Position.ToString(),
+                        IsPlaying = musicPlayerService.IsPlaying
                     };
-                    state["PlaybackState"] = playbackState;
 
                     _logger?.LogInformation("Audio playback state saved, music will continue in background");
                 }
@@ -1213,25 +1234,16 @@ namespace GelBox
 
                     if (queueItemIds.Count > 0)
                     {
-                        state["MusicQueueState"] = new Dictionary<string, object>
+                        state.MusicQueueState = new MusicQueueStateSnapshot
                         {
-                            ["ItemIds"] = queueItemIds,
-                            ["CurrentIndex"] = musicPlayerService.CurrentQueueIndex,
-                            ["IsShuffled"] = musicPlayerService.IsShuffleMode
+                            ItemIds = queueItemIds,
+                            CurrentIndex = musicPlayerService.CurrentQueueIndex,
+                            IsShuffled = musicPlayerService.IsShuffleMode
                         };
                     }
                 }
 
-                // Don't save preferences - they're already persisted automatically
-
-                // Use optimized serialization options
-                var jsonOptions = new JsonSerializerOptions
-                {
-                    WriteIndented = false, // Compact JSON
-                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                };
-                var serializedState = JsonSerializer.Serialize(state, jsonOptions);
-                preferencesService.SetValue("AppState", serializedState);
+                await preferencesService.SaveAsync(PreferenceConstants.AppState, state).ConfigureAwait(false);
 
                 _logger?.LogInformation("Saved application state");
             }
@@ -1239,8 +1251,6 @@ namespace GelBox
             {
                 _logger?.LogError(ex, "Failed to save application state");
             }
-
-            return Task.CompletedTask;
         }
 
         private async Task RestoreMusicQueueStateAsync()
@@ -1268,28 +1278,17 @@ namespace GelBox
                     return;
                 }
 
-                var serializedState = preferencesService.GetValue<string>("AppState");
-                if (string.IsNullOrWhiteSpace(serializedState))
-                {
-                    return;
-                }
-
-                using var doc = JsonDocument.Parse(serializedState);
-                if (!doc.RootElement.TryGetProperty("MusicQueueState", out var queueState))
-                {
-                    return;
-                }
-
-                if (!queueState.TryGetProperty("ItemIds", out var itemIdsElement) ||
-                    itemIdsElement.ValueKind != JsonValueKind.Array)
+                var appState = await preferencesService.LoadAsync<AppStateSnapshot>(PreferenceConstants.AppState)
+                    .ConfigureAwait(false);
+                if (appState?.MusicQueueState?.ItemIds == null || !appState.MusicQueueState.ItemIds.Any())
                 {
                     return;
                 }
 
                 var ids = new List<Guid>();
-                foreach (var idElement in itemIdsElement.EnumerateArray())
+                foreach (var idString in appState.MusicQueueState.ItemIds)
                 {
-                    if (Guid.TryParse(idElement.GetString(), out var guid))
+                    if (Guid.TryParse(idString, out var guid))
                     {
                         ids.Add(guid);
                     }
@@ -1322,19 +1321,8 @@ namespace GelBox
                     return;
                 }
 
-                var currentIndex = 0;
-                if (queueState.TryGetProperty("CurrentIndex", out var currentIndexElement) &&
-                    currentIndexElement.ValueKind == JsonValueKind.Number)
-                {
-                    currentIndex = currentIndexElement.GetInt32();
-                }
-
-                var isShuffled = false;
-                if (queueState.TryGetProperty("IsShuffled", out var shuffledElement) &&
-                    (shuffledElement.ValueKind == JsonValueKind.True || shuffledElement.ValueKind == JsonValueKind.False))
-                {
-                    isShuffled = shuffledElement.GetBoolean();
-                }
+                var currentIndex = appState.MusicQueueState.CurrentIndex;
+                var isShuffled = appState.MusicQueueState.IsShuffled;
 
                 currentIndex = Math.Max(0, Math.Min(currentIndex, restoredQueue.Count - 1));
                 musicPlayerService.SetQueue(restoredQueue, currentIndex);
