@@ -275,6 +275,7 @@ namespace GelBox.Services
         void SetCurrentIndex(int index);
 
         void SetShuffle(bool enabled);
+        bool RestoreShuffleState(List<int> shuffledIndices, int currentShuffleIndex);
         void CreateShuffledIndices();
         int GetNextIndex(bool isRepeatAll);
         int GetPreviousIndex(bool isRepeatAll);

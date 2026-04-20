@@ -281,7 +281,21 @@ namespace GelBox.Services
 
                     if (IsShuffleMode && Queue.Count > 1)
                     {
-                        CreateShuffledIndices();
+                        if (ValidateShuffledIndices(ShuffledIndices))
+                        {
+                            CurrentShuffleIndex = ShuffledIndices.IndexOf(CurrentQueueIndex);
+                            if (CurrentShuffleIndex == -1)
+                            {
+                                CurrentShuffleIndex = 0;
+                            }
+
+                            _lastQueueHash = GetQueueHash();
+                            Logger.LogInformation("Preserving existing shuffle indices");
+                        }
+                        else
+                        {
+                            CreateShuffledIndices();
+                        }
                     }
                     else
                     {
@@ -296,6 +310,66 @@ namespace GelBox.Services
                     await ErrorHandler.HandleErrorAsync(ex, context, false);
                 }
             });
+        }
+
+        public bool RestoreShuffleState(List<int> shuffledIndices, int currentShuffleIndex)
+        {
+            try
+            {
+                if (!ValidateShuffledIndices(shuffledIndices))
+                {
+                    Logger.LogWarning("Cannot restore shuffle state: invalid shuffled indices");
+                    return false;
+                }
+
+                IsShuffleMode = true;
+                ShuffledIndices = new List<int>(shuffledIndices);
+
+                var currentIndexInShuffle = ShuffledIndices.IndexOf(CurrentQueueIndex);
+                CurrentShuffleIndex = currentIndexInShuffle >= 0
+                    ? currentIndexInShuffle
+                    : Math.Max(0, Math.Min(currentShuffleIndex, ShuffledIndices.Count - 1));
+
+                _lastQueueHash = GetQueueHash();
+                Logger.LogInformation(
+                    "Restored shuffle state with {Count} entries at shuffle index {CurrentShuffleIndex}",
+                    ShuffledIndices.Count, CurrentShuffleIndex);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to restore shuffle state");
+                return false;
+            }
+        }
+
+        private bool ValidateShuffledIndices(List<int> shuffledIndices)
+        {
+            if (Queue == null || Queue.Count <= 1)
+            {
+                return false;
+            }
+
+            if (shuffledIndices == null || shuffledIndices.Count != Queue.Count)
+            {
+                return false;
+            }
+
+            var seen = new HashSet<int>();
+            foreach (var index in shuffledIndices)
+            {
+                if (index < 0 || index >= Queue.Count)
+                {
+                    return false;
+                }
+
+                if (!seen.Add(index))
+                {
+                    return false;
+                }
+            }
+
+            return seen.Count == Queue.Count;
         }
 
         public Task InitializeAsync(MediaPlaybackParams playbackParams, BaseItemDto currentItem)

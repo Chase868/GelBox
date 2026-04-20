@@ -61,6 +61,8 @@ namespace GelBox
             public List<QueueItemSnapshot> Items { get; set; } = new();
             public int CurrentIndex { get; set; }
             public bool IsShuffled { get; set; }
+            public List<int> ShuffledIndices { get; set; } = new();
+            public int CurrentShuffleIndex { get; set; }
             public bool WasPlaying { get; set; }
             public string Position { get; set; }
             public string CurrentItemId { get; set; }
@@ -1242,6 +1244,7 @@ namespace GelBox
                 }
 
                 var musicPlayerService = GetService<IMusicPlayerService>();
+                var queueService = GetService<IPlaybackQueueService>();
                 if (musicPlayerService?.IsPlaying == true)
                 {
                     state.PlaybackState = new PlaybackStateSnapshot
@@ -1282,7 +1285,9 @@ namespace GelBox
                             ItemIds = queueItemIds,
                             Items = queueItems,
                             CurrentIndex = musicPlayerService.CurrentQueueIndex,
-                            IsShuffled = musicPlayerService.IsShuffleMode
+                            IsShuffled = musicPlayerService.IsShuffleMode,
+                            ShuffledIndices = queueService?.ShuffledIndices?.ToList() ?? new List<int>(),
+                            CurrentShuffleIndex = queueService?.CurrentShuffleIndex ?? 0
                         };
                     }
                 }
@@ -1363,6 +1368,7 @@ namespace GelBox
             {
                 var preferencesService = GetService<IPreferencesService>();
                 var musicPlayerService = GetService<IMusicPlayerService>();
+                var queueService = GetService<IPlaybackQueueService>();
 
                 if (preferencesService == null || musicPlayerService == null)
                 {
@@ -1374,6 +1380,8 @@ namespace GelBox
                 {
                     CurrentIndex = musicPlayerService.CurrentQueueIndex,
                     IsShuffled = musicPlayerService.IsShuffleMode,
+                    ShuffledIndices = queueService?.ShuffledIndices?.ToList() ?? new List<int>(),
+                    CurrentShuffleIndex = queueService?.CurrentShuffleIndex ?? 0,
                     WasPlaying = musicPlayerService.IsPlaying,
                     Position = musicPlayerService.MediaPlayer?.PlaybackSession?.Position.ToString(),
                     CurrentItemId = musicPlayerService.CurrentItem?.Id?.ToString(),
@@ -1516,6 +1524,7 @@ namespace GelBox
             {
                 var preferencesService = GetService<IPreferencesService>();
                 var musicPlayerService = GetService<IMusicPlayerService>();
+                var queueService = GetService<IPlaybackQueueService>();
                 var apiClient = GetService<JellyfinApiClient>();
 
                 if (preferencesService == null || musicPlayerService == null)
@@ -1638,7 +1647,22 @@ namespace GelBox
                     await UIHelper.RunOnUIThreadAsync(() =>
                     {
                         musicPlayerService.SetQueue(restoredQueue, currentIndex);
-                        musicPlayerService.SetShuffle(isShuffled);
+
+                        if (isShuffled)
+                        {
+                            var restoredShuffle = queueService?.RestoreShuffleState(
+                                queueState.ShuffledIndices,
+                                queueState.CurrentShuffleIndex) == true;
+
+                            if (!restoredShuffle)
+                            {
+                                musicPlayerService.SetShuffle(true);
+                            }
+                        }
+                        else
+                        {
+                            musicPlayerService.SetShuffle(false);
+                        }
                     }, logger: _logger);
 
                     _logger?.LogWarning($"Queue restored with {restoredQueue.Count} items at index {currentIndex}, shuffled={isShuffled}");
