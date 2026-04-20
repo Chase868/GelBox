@@ -37,6 +37,7 @@ namespace GelBox.ViewModels
         // Playback settings
         private bool _autoPlayNextEpisode = true;
         private bool _autoSkipIntros = false;
+        private bool _restorePlaybackOnLaunch = true;
         private int _controlsHideDelay = 3;
         // Quality and format settings
         private bool _enableDirectPlay = true;
@@ -212,6 +213,7 @@ namespace GelBox.ViewModels
                 _autoPlayNextEpisode = appPrefs.AutoPlayNextEpisode;
                 _pauseOnFocusLoss = appPrefs.PauseOnFocusLoss;
                 _autoSkipIntros = appPrefs.AutoSkipIntroEnabled;
+                _restorePlaybackOnLaunch = appPrefs.RestorePlaybackOnLaunch;
                 _controlsHideDelay = appPrefs.ControlsHideDelay;
                 _enableDirectPlay = appPrefs.EnableDirectPlay;
                 _allowAudioStreamCopy = appPrefs.AllowAudioStreamCopy;
@@ -235,6 +237,7 @@ namespace GelBox.ViewModels
                 OnPropertyChanged(nameof(AutoPlayNextEpisode));
                 OnPropertyChanged(nameof(PauseOnFocusLoss));
                 OnPropertyChanged(nameof(AutoSkipIntros));
+                OnPropertyChanged(nameof(RestorePlaybackOnLaunch));
                 OnPropertyChanged(nameof(ControlsHideDelay));
                 OnPropertyChanged(nameof(EnableDirectPlay));
                 OnPropertyChanged(nameof(AllowAudioStreamCopy));
@@ -269,6 +272,7 @@ namespace GelBox.ViewModels
             AutoPlayNextEpisode = true;
             PauseOnFocusLoss = true;
             AutoSkipIntros = false;
+            RestorePlaybackOnLaunch = true;
             ControlsHideDelay = 3;
             EnableDirectPlay = true;
             AllowAudioStreamCopy = false;
@@ -385,6 +389,20 @@ namespace GelBox.ViewModels
                     FireAndForget(
                         () => UpdateAppPreferenceAsync(prefs => prefs.AutoSkipIntroEnabled = value,
                             nameof(AutoSkipIntros)));
+                }
+            }
+        }
+
+        public bool RestorePlaybackOnLaunch
+        {
+            get => _restorePlaybackOnLaunch;
+            set
+            {
+                if (SetSettingProperty(ref _restorePlaybackOnLaunch, value))
+                {
+                    FireAndForget(
+                        () => UpdateAppPreferenceAsync(prefs => prefs.RestorePlaybackOnLaunch = value,
+                            nameof(RestorePlaybackOnLaunch)));
                 }
             }
         }

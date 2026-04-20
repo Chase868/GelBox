@@ -647,8 +647,11 @@ namespace GelBox.Services
                     {
                         if (_navigationStack.Count > 1)
                         {
-                            // Pop the page we're leaving
-                            _navigationStack.Pop();
+                            // Pop the page we're leaving and remove it from circular-nav history
+                            // so navigating forward to it again is not flagged as circular.
+                            var leaving = _navigationStack.Pop();
+                            var leavingKey = $"{leaving.PageType?.FullName}:{leaving.Parameter?.GetHashCode() ?? 0}";
+                            _navigationHistory.Remove(leavingKey);
 
                             // Update last navigation info to the page we're going back to
                             if (_navigationStack.Count > 0)
