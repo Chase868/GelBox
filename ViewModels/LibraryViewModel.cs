@@ -26,9 +26,11 @@ namespace GelBox.ViewModels
     {
         private const int PageSize = DefaultPageSize;
         private const int MaxGenreCacheSize = 50; // Limit cache to 50 libraries
+        private const string LibraryViewStateKey = "LibraryViewState";
         private readonly JellyfinApiClient _apiClient;
         private readonly ConcurrentDictionary<Guid, IEnumerable<string>> _genreCache = new();
         private readonly Queue<Guid> _genreCacheOrder = new(); // Track insertion order for LRU
+        private readonly IPreferencesService _preferencesService;
         private readonly IUserProfileService _userProfileService;
         private CancellationTokenSource _applyFiltersCts;
         private int? _cachedActiveFilterCount;
@@ -46,6 +48,7 @@ namespace GelBox.ViewModels
         private bool _hasMoreItems;
         private bool _isAscending = true;
         private bool _isLoadingMore = false;
+        private bool _isRestoringViewState = false;
 
         private CancellationTokenSource _loadFiltersCts;
         private readonly object _loadFiltersCtsLock = new object();
@@ -68,13 +71,30 @@ namespace GelBox.ViewModels
 
         private int _totalItemCount = 0;
 
+        private sealed class LibraryViewState
+        {
+            public string CurrentFilter { get; set; }
+            public string CurrentAlphabetFilter { get; set; }
+            public int SelectedSortIndex { get; set; }
+            public bool IsAscending { get; set; }
+            public string SearchTerm { get; set; }
+            public Guid? SelectedLibraryId { get; set; }
+            public List<string> SelectedGenres { get; set; } = new();
+            public List<string> SelectedYears { get; set; } = new();
+            public List<string> SelectedRatings { get; set; } = new();
+            public List<string> SelectedResolutions { get; set; } = new();
+            public List<string> SelectedPlayedStatuses { get; set; } = new();
+        }
+
         public LibraryViewModel(
             JellyfinApiClient apiClient,
+            IPreferencesService preferencesService,
             IUserProfileService userProfileService,
             ILogger<LibraryViewModel> logger)
             : base(logger)
         {
             _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
+            _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
             _userProfileService = userProfileService ?? throw new ArgumentNullException(nameof(userProfileService));
 
             _currentStartIndex = 0;
@@ -117,6 +137,10 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _searchTerm, value))
                 {
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Search");
+                    }
                     // Don't apply filters immediately - wait for Apply button or user action
                     // This could be enhanced to have a debounced search if needed
                 }
@@ -133,6 +157,11 @@ namespace GelBox.ViewModels
 
                 if (SetProperty(ref _selectedLibrary, value))
                 {
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_SelectedLibrary");
+                    }
+
                     if (value != null)
                     {
                         Logger.LogInformation(
@@ -308,6 +337,10 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _currentFilter, value))
                 {
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Filter");
+                    }
                     OnPropertyChanged(nameof(FilterButtonStyles));
                     OnPropertyChanged(nameof(ItemTemplateName));
                     OnPropertyChanged(nameof(ItemWidth));
@@ -322,7 +355,14 @@ namespace GelBox.ViewModels
             get => _currentAlphabetFilter;
             set
             {
-                if (SetProperty(ref _currentAlphabetFilter, value)) { OnPropertyChanged(nameof(AlphabetButtonStyles)); }
+                if (SetProperty(ref _currentAlphabetFilter, value))
+                {
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Alphabet");
+                    }
+                    OnPropertyChanged(nameof(AlphabetButtonStyles));
+                }
             }
         }
 
@@ -333,8 +373,12 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _selectedSortIndex, value))
                 {
-                    // Trigger refresh when sort changes
-                    FireAndForget(async () => await ApplyFiltersAsync());
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Sort");
+                        // Trigger refresh when sort changes
+                        FireAndForget(async () => await ApplyFiltersAsync());
+                    }
                 }
             }
         }
@@ -346,8 +390,12 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _isAscending, value))
                 {
-                    // Trigger refresh when sort order changes
-                    FireAndForget(async () => await ApplyFiltersAsync());
+                    if (!_isRestoringViewState)
+                    {
+                        FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_SortOrder");
+                        // Trigger refresh when sort order changes
+                        FireAndForget(async () => await ApplyFiltersAsync());
+                    }
                 }
             }
         }
@@ -470,9 +518,13 @@ namespace GelBox.ViewModels
                 await LoadLibrariesAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            await RestoreViewStateAsync(cancellationToken).ConfigureAwait(false);
+
             cancellationToken.ThrowIfCancellationRequested();
 
             await LoadFiltersAsync(cancellationToken).ConfigureAwait(false);
+
+            await RestoreViewStateAsync(cancellationToken).ConfigureAwait(false);
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -1354,6 +1406,8 @@ namespace GelBox.ViewModels
                 var newItems = result?.Items?.ToList() ?? new List<BaseItemDto>();
                 var fetchedCount = newItems.Count;
 
+                await SaveViewStateAsync().ConfigureAwait(false);
+
                 // Log the API response
                 Logger.LogInformation(
                     $"Filter API Response: Received {fetchedCount} items, TotalRecordCount: {result?.TotalRecordCount}");
@@ -1778,6 +1832,7 @@ namespace GelBox.ViewModels
                     });
                     CurrentAlphabetFilter = string.Empty;
                     InvalidateFilterCountCache();
+                    await SaveViewStateAsync().ConfigureAwait(false);
                     await ApplyFiltersAsync();
                 }
                 catch (Exception ex)
@@ -1806,6 +1861,121 @@ namespace GelBox.ViewModels
                     EmptyStateTitle = "This library is empty";
                     EmptyStateMessage = "Add some media to get started.";
                 }
+            }
+        }
+
+        private async Task SaveViewStateAsync()
+        {
+            try
+            {
+                var state = new LibraryViewState
+                {
+                    CurrentFilter = CurrentFilter,
+                    CurrentAlphabetFilter = CurrentAlphabetFilter,
+                    SelectedSortIndex = SelectedSortIndex,
+                    IsAscending = IsAscending,
+                    SearchTerm = SearchTerm,
+                    SelectedLibraryId = SelectedLibrary?.Id,
+                    SelectedGenres = Genres.Where(g => g.IsSelected).Select(g => g.Value).ToList(),
+                    SelectedYears = Years.Where(y => y.IsSelected).Select(y => y.Value).ToList(),
+                    SelectedRatings = Ratings.Where(r => r.IsSelected).Select(r => r.Value).ToList(),
+                    SelectedResolutions = Resolutions.Where(r => r.IsSelected).Select(r => r.Value).ToList(),
+                    SelectedPlayedStatuses = PlayedStatuses.Where(p => p.IsSelected).Select(p => p.Value).ToList()
+                };
+
+                await _preferencesService.SaveAsync(LibraryViewStateKey, state).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogWarning(ex, "Failed to save library view state");
+            }
+        }
+
+        private async Task RestoreViewStateAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var savedState = await _preferencesService.LoadAsync<LibraryViewState>(LibraryViewStateKey)
+                    .ConfigureAwait(false);
+
+                if (savedState == null)
+                {
+                    return;
+                }
+
+                _isRestoringViewState = true;
+                try
+                {
+                    if (savedState.SelectedLibraryId.HasValue && Libraries.Any())
+                    {
+                        var restoredLibrary = Libraries.FirstOrDefault(l => l.Id == savedState.SelectedLibraryId.Value);
+                        if (restoredLibrary != null && SelectedLibrary?.Id != restoredLibrary.Id)
+                        {
+                            SelectedLibrary = restoredLibrary;
+                        }
+                    }
+
+                    CurrentFilter = string.IsNullOrWhiteSpace(savedState.CurrentFilter) ? "All" : savedState.CurrentFilter;
+                    CurrentAlphabetFilter = savedState.CurrentAlphabetFilter ?? string.Empty;
+                    SelectedSortIndex = savedState.SelectedSortIndex;
+                    IsAscending = savedState.IsAscending;
+                    SearchTerm = savedState.SearchTerm ?? string.Empty;
+                }
+                finally
+                {
+                    _isRestoringViewState = false;
+                }
+
+                if (Genres.Any())
+                {
+                    foreach (var genre in Genres)
+                    {
+                        genre.IsSelected = savedState.SelectedGenres?.Contains(genre.Value) == true;
+                    }
+                }
+
+                if (Years.Any())
+                {
+                    foreach (var year in Years)
+                    {
+                        year.IsSelected = savedState.SelectedYears?.Contains(year.Value) == true;
+                    }
+                }
+
+                if (Ratings.Any())
+                {
+                    foreach (var rating in Ratings)
+                    {
+                        rating.IsSelected = savedState.SelectedRatings?.Contains(rating.Value) == true;
+                    }
+                }
+
+                if (Resolutions.Any())
+                {
+                    foreach (var resolution in Resolutions)
+                    {
+                        resolution.IsSelected = savedState.SelectedResolutions?.Contains(resolution.Value) == true;
+                    }
+                }
+
+                if (PlayedStatuses.Any())
+                {
+                    foreach (var status in PlayedStatuses)
+                    {
+                        status.IsSelected = savedState.SelectedPlayedStatuses?.Contains(status.Value) == true;
+                    }
+                }
+
+                InvalidateFilterCountCache();
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore cancellation during restore.
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogWarning(ex, "Failed to restore library view state");
             }
         }
 

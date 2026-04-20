@@ -12,6 +12,7 @@ using GelBox.Services;
 using GelBox.ViewModels;
 using GelBox.Views;
 using Jellyfin.Sdk;
+using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions.Authentication;
@@ -969,6 +970,9 @@ namespace GelBox
                         {
                             // Visual tree check failed
                         }
+
+                        // Restore queued music after navigation/services are ready.
+                        await RestoreMusicQueueStateAsync();
                     }
 
                     // Window.Current is null
@@ -1200,6 +1204,24 @@ namespace GelBox
                     _logger?.LogInformation("Audio playback state saved, music will continue in background");
                 }
 
+                if (musicPlayerService?.Queue?.Any() == true)
+                {
+                    var queueItemIds = musicPlayerService.Queue
+                        .Where(q => q?.Id.HasValue == true)
+                        .Select(q => q.Id.Value.ToString())
+                        .ToList();
+
+                    if (queueItemIds.Count > 0)
+                    {
+                        state["MusicQueueState"] = new Dictionary<string, object>
+                        {
+                            ["ItemIds"] = queueItemIds,
+                            ["CurrentIndex"] = musicPlayerService.CurrentQueueIndex,
+                            ["IsShuffled"] = musicPlayerService.IsShuffleMode
+                        };
+                    }
+                }
+
                 // Don't save preferences - they're already persisted automatically
 
                 // Use optimized serialization options
@@ -1219,6 +1241,111 @@ namespace GelBox
             }
 
             return Task.CompletedTask;
+        }
+
+        private async Task RestoreMusicQueueStateAsync()
+        {
+            try
+            {
+                var preferencesService = GetService<IPreferencesService>();
+                var authService = GetService<IAuthenticationService>();
+                var musicPlayerService = GetService<IMusicPlayerService>();
+                var apiClient = GetService<JellyfinApiClient>();
+
+                if (preferencesService == null || authService == null || musicPlayerService == null || apiClient == null)
+                {
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(authService.AccessToken) || string.IsNullOrWhiteSpace(authService.ServerUrl))
+                {
+                    return;
+                }
+
+                // Don't overwrite an active in-memory queue.
+                if (musicPlayerService.Queue?.Any() == true)
+                {
+                    return;
+                }
+
+                var serializedState = preferencesService.GetValue<string>("AppState");
+                if (string.IsNullOrWhiteSpace(serializedState))
+                {
+                    return;
+                }
+
+                using var doc = JsonDocument.Parse(serializedState);
+                if (!doc.RootElement.TryGetProperty("MusicQueueState", out var queueState))
+                {
+                    return;
+                }
+
+                if (!queueState.TryGetProperty("ItemIds", out var itemIdsElement) ||
+                    itemIdsElement.ValueKind != JsonValueKind.Array)
+                {
+                    return;
+                }
+
+                var ids = new List<Guid>();
+                foreach (var idElement in itemIdsElement.EnumerateArray())
+                {
+                    if (Guid.TryParse(idElement.GetString(), out var guid))
+                    {
+                        ids.Add(guid);
+                    }
+                }
+
+                if (ids.Count == 0)
+                {
+                    return;
+                }
+
+                var restoredQueue = new List<BaseItemDto>();
+                foreach (var id in ids)
+                {
+                    try
+                    {
+                        var item = await apiClient.Items[id].GetAsync().ConfigureAwait(false);
+                        if (item != null)
+                        {
+                            restoredQueue.Add(item);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogDebug(ex, $"Skipping queue item restore for {id}");
+                    }
+                }
+
+                if (!restoredQueue.Any())
+                {
+                    return;
+                }
+
+                var currentIndex = 0;
+                if (queueState.TryGetProperty("CurrentIndex", out var currentIndexElement) &&
+                    currentIndexElement.ValueKind == JsonValueKind.Number)
+                {
+                    currentIndex = currentIndexElement.GetInt32();
+                }
+
+                var isShuffled = false;
+                if (queueState.TryGetProperty("IsShuffled", out var shuffledElement) &&
+                    (shuffledElement.ValueKind == JsonValueKind.True || shuffledElement.ValueKind == JsonValueKind.False))
+                {
+                    isShuffled = shuffledElement.GetBoolean();
+                }
+
+                currentIndex = Math.Max(0, Math.Min(currentIndex, restoredQueue.Count - 1));
+                musicPlayerService.SetQueue(restoredQueue, currentIndex);
+                musicPlayerService.SetShuffle(isShuffled);
+
+                _logger?.LogInformation($"Restored music queue with {restoredQueue.Count} items at index {currentIndex}");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to restore music queue state");
+            }
         }
 
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
