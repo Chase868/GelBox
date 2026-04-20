@@ -96,7 +96,7 @@ namespace GelBox.Services
                 {
                     windowsHttpClient.DefaultRequestHeaders.Add("Authorization", $"MediaBrowser Token=\"{accessToken}\"");
                 }
-                windowsHttpClient.DefaultRequestHeaders.Add("User-Agent", $"{BrandingConstants.USER_AGENT}/1.0");
+                windowsHttpClient.DefaultRequestHeaders.Add("User-Agent", $"{BrandingConstants.USER_AGENT}/{BrandingConstants.APP_VERSION}");
 
                 var result = await AdaptiveMediaSource.CreateFromUriAsync(new Uri(mediaUrl), windowsHttpClient).AsTask()
                     .ConfigureAwait(false);

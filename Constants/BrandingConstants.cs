@@ -10,6 +10,10 @@ namespace GelBox.Constants
         /// </summary>
         public const string APP_NAME = "GelBox";
 
+        /// <summary>
+        ///     The current application version (keep in sync with Package.appxmanifest)
+        /// </summary>
+        public const string APP_VERSION = "1.0.2";
 
         /// <summary>
         ///     User agent for API calls

@@ -215,7 +215,7 @@ namespace GelBox
             services.AddHttpClient("JellyfinClient", (serviceProvider, client) =>
             {
                 // Configure default headers
-                client.DefaultRequestHeaders.UserAgent.ParseAdd($"{BrandingConstants.USER_AGENT}/1.0");
+                client.DefaultRequestHeaders.UserAgent.ParseAdd($"{BrandingConstants.USER_AGENT}/{BrandingConstants.APP_VERSION}");
                 client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 
                 // Set timeout from preferences
@@ -269,7 +269,7 @@ namespace GelBox
 
                 settings.Initialize(
                     BrandingConstants.APP_NAME,
-                    "1.0.2",
+                    BrandingConstants.APP_VERSION,
                     deviceName,
                     deviceId
                 );

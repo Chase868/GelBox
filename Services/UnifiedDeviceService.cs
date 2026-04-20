@@ -922,7 +922,7 @@ namespace GelBox.Services
             }
             catch
             {
-                return "1.0.2.0";
+                return BrandingConstants.APP_VERSION;
             }
         }
 
