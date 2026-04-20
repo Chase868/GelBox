@@ -139,7 +139,32 @@ namespace GelBox.Services
                 {
                     if (item != null && CurrentQueueIndex >= 0)
                     {
-                        Queue.Insert(CurrentQueueIndex + 1, item);
+                        var insertQueueIndex = CurrentQueueIndex + 1;
+                        Queue.Insert(insertQueueIndex, item);
+
+                        // Keep shuffle order in sync so "Play Next" is actually next while shuffled.
+                        if (IsShuffleMode)
+                        {
+                            if (ShuffledIndices?.Any() == true)
+                            {
+                                for (var i = 0; i < ShuffledIndices.Count; i++)
+                                {
+                                    if (ShuffledIndices[i] >= insertQueueIndex)
+                                    {
+                                        ShuffledIndices[i]++;
+                                    }
+                                }
+
+                                var insertShuffleIndex = Math.Max(0,
+                                    Math.Min(CurrentShuffleIndex + 1, ShuffledIndices.Count));
+                                ShuffledIndices.Insert(insertShuffleIndex, insertQueueIndex);
+                            }
+                            else if (Queue.Count > 1)
+                            {
+                                CreateShuffledIndices();
+                            }
+                        }
+
                         _lastQueueHash = 0;
                         QueueChanged?.Invoke(this, Queue);
                     }
