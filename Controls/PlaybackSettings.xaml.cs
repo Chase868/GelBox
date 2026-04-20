@@ -36,12 +36,30 @@ namespace GelBox.Controls
 
             // Set control values from preferences
             AutoSkipIntroToggle.IsOn = _preferences.AutoSkipIntroEnabled;
+            RestorePlaybackToggle.IsOn = _preferences.RestorePlaybackOnLaunch;
             ControlsHideDelayBox.Value = _preferences.ControlsHideDelay;
 
             // Set video stretch mode
             VideoStretchModeCombo.SelectedIndex = _preferences.VideoStretchMode == "UniformToFill" ? 1 : 0;
 
             _isInitializing = false;
+        }
+
+        private async void RestorePlaybackToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (!_isInitializing && _preferences != null && _preferencesService != null)
+            {
+                var context = CreateErrorContext("RestorePlaybackToggle");
+                try
+                {
+                    _preferences.RestorePlaybackOnLaunch = RestorePlaybackToggle.IsOn;
+                    await _preferencesService.UpdateAppPreferencesAsync(_preferences);
+                }
+                catch (Exception ex)
+                {
+                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                }
+            }
         }
 
         private async void AutoSkipIntroToggle_Toggled(object sender, RoutedEventArgs e)

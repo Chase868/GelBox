@@ -19,6 +19,7 @@ namespace GelBox.Models
         public bool AutoSkipIntroEnabled { get; set; } = false;
         public bool AutoSkipOutroEnabled { get; set; } = false;
         public bool PauseOnFocusLoss { get; set; } = false; // Whether to pause when Xbox guide is opened
+        public bool RestorePlaybackOnLaunch { get; set; } = true; // Whether to resume music queue after app restart
 
         // === Skip Settings ===
         // Skip values are currently hardcoded: forward=30s, backward=10s

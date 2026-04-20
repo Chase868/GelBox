@@ -1554,28 +1554,34 @@ namespace GelBox.Services
 
                     Logger.LogInformation("Setting new MediaPlaybackItem as source");
                     _lastPlaybackStartTime = DateTime.UtcNow;
-                    await _mediaControlService.SetMediaSource(playbackItem, item).ConfigureAwait(false);
 
-                    // Apply volume normalization for audio items
+                    // For audio items, fetch full metadata before firing NowPlayingChanged so that
+                    // AlbumId, RunTimeTicks, ImageTags etc. are available for UI (art, progress bar).
+                    var itemForNotification = item;
                     if (item.Type == BaseItemDto_Type.Audio)
                     {
-                        var normalizationItem = item;
                         try
                         {
                             var fullItem = await _mediaPlaybackService.GetItemAsync(item.Id?.ToString(), CancellationToken.None).ConfigureAwait(false);
                             if (fullItem != null)
                             {
-                                normalizationItem = fullItem;
-                                Logger.LogInformation("Loaded full item metadata for volume normalization");
+                                itemForNotification = fullItem;
+                                Logger.LogInformation("Loaded full item metadata before NowPlayingChanged");
                             }
                         }
                         catch (Exception ex)
                         {
-                            Logger.LogWarning(ex, "Failed to refresh item metadata for normalization, using original item");
+                            Logger.LogWarning(ex, "Failed to refresh item metadata before notification, using original item");
                         }
+                    }
 
+                    await _mediaControlService.SetMediaSource(playbackItem, itemForNotification).ConfigureAwait(false);
+
+                    // Apply volume normalization for audio items (reuse already-fetched full item)
+                    if (item.Type == BaseItemDto_Type.Audio)
+                    {
                         await _volumeNormalizationService.ApplyVolumeNormalizationAsync(
-                            _mediaControlService.MediaPlayer, normalizationItem).ConfigureAwait(false);
+                            _mediaControlService.MediaPlayer, itemForNotification).ConfigureAwait(false);
                     }
 
                     _mediaControlService.Play();

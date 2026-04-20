@@ -34,6 +34,12 @@
                               OffContent="Disabled"
                               Toggled="AutoSkipIntroToggle_Toggled" />
 
+                <ToggleSwitch x:Name="RestorePlaybackToggle"
+                              Header="Resume Music on Launch"
+                              OnContent="Enabled"
+                              OffContent="Disabled"
+                              Toggled="RestorePlaybackToggle_Toggled" />
+
                 <!-- Language Settings -->
                 <TextBlock Text="Language Settings (Global Default)"
                            Style="{StaticResource StandardBodyTextStyle}"

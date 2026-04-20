@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
@@ -43,6 +44,8 @@ namespace GelBox
             public BaseItemDto_Type? Type { get; set; }
             public BaseItemDto_MediaType? MediaType { get; set; }
             public string AlbumArtist { get; set; }
+            public string AlbumId { get; set; }
+            public long? RunTimeTicks { get; set; }
         }
 
         private sealed class PlaybackStateSnapshot
@@ -58,6 +61,9 @@ namespace GelBox
             public List<QueueItemSnapshot> Items { get; set; } = new();
             public int CurrentIndex { get; set; }
             public bool IsShuffled { get; set; }
+            public bool WasPlaying { get; set; }
+            public string Position { get; set; }
+            public string CurrentItemId { get; set; }
         }
 
         private sealed class AppStateSnapshot
@@ -75,6 +81,8 @@ namespace GelBox
         private bool _statePersistenceEventsHooked;
         private bool _stateSavePending;
         private bool _startupStateRestoreCompleted;
+        private bool _playbackResumeTriggeredThisLaunch;
+        private bool _playbackResumeCompletedThisLaunch;
 
 
         public App()
@@ -1010,6 +1018,7 @@ namespace GelBox
 
                         // Restore queued music after navigation/services are ready.
                         await RestoreMusicQueueStateAsync();
+                        _ = Task.Run(async () => await RetryMusicQueueRestoreAsync().ConfigureAwait(false));
 
                         _startupStateRestoreCompleted = true;
                         HookStatePersistenceEvents();
@@ -1260,7 +1269,9 @@ namespace GelBox
                             Name = q.Name,
                             Type = q.Type,
                             MediaType = q.MediaType,
-                            AlbumArtist = q.AlbumArtist
+                            AlbumArtist = q.AlbumArtist,
+                            AlbumId = q.AlbumId?.ToString(),
+                            RunTimeTicks = q.RunTimeTicks
                         })
                         .ToList();
 
@@ -1363,6 +1374,9 @@ namespace GelBox
                 {
                     CurrentIndex = musicPlayerService.CurrentQueueIndex,
                     IsShuffled = musicPlayerService.IsShuffleMode,
+                    WasPlaying = musicPlayerService.IsPlaying,
+                    Position = musicPlayerService.MediaPlayer?.PlaybackSession?.Position.ToString(),
+                    CurrentItemId = musicPlayerService.CurrentItem?.Id?.ToString(),
                     ItemIds = queue.Where(q => q?.Id.HasValue == true).Select(q => q.Id.Value.ToString()).ToList(),
                     Items = queue
                         .Where(q => q != null && q.Id.HasValue)
@@ -1372,17 +1386,128 @@ namespace GelBox
                             Name = q.Name,
                             Type = q.Type,
                             MediaType = q.MediaType,
-                            AlbumArtist = q.AlbumArtist
+                            AlbumArtist = q.AlbumArtist,
+                            AlbumId = q.AlbumId?.ToString(),
+                            RunTimeTicks = q.RunTimeTicks
                         })
                         .ToList()
                 };
 
                 await preferencesService.SaveAsync(MusicQueueStateKey, snapshot).ConfigureAwait(false);
+                Debug.WriteLine($"[QueueState] Saved dedicated queue snapshot: count={snapshot.ItemIds.Count}, index={snapshot.CurrentIndex}, shuffled={snapshot.IsShuffled}");
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to save dedicated music queue state");
+                Debug.WriteLine($"[QueueState] Save failed: {ex.Message}");
             }
+        }
+
+        private async Task RetryMusicQueueRestoreAsync()
+        {
+            // Session/auth data can hydrate after initial launch; retry restore briefly.
+            for (var attempt = 1; attempt <= 10; attempt++)
+            {
+                await Task.Delay(1000).ConfigureAwait(false);
+
+                var musicPlayerService = GetService<IMusicPlayerService>();
+                var hasQueue = musicPlayerService?.Queue?.Any() == true;
+                var isPlaying = musicPlayerService?.IsPlaying == true;
+
+                if (hasQueue)
+                {
+                    Debug.WriteLine($"[QueueState] Retry loop ended on attempt {attempt} (queue restored, isPlaying={isPlaying})");
+                    return;
+                }
+
+                await RestoreMusicQueueStateAsync().ConfigureAwait(false);
+
+                musicPlayerService = GetService<IMusicPlayerService>();
+                hasQueue = musicPlayerService?.Queue?.Any() == true;
+                isPlaying = musicPlayerService?.IsPlaying == true;
+
+                if (hasQueue && isPlaying)
+                {
+                    Debug.WriteLine($"[QueueState] Retry restore succeeded on attempt {attempt}");
+                    return;
+                }
+            }
+
+            var finalService = GetService<IMusicPlayerService>();
+            var finalQueueCount = finalService?.Queue?.Count ?? 0;
+            var finalIsPlaying = finalService?.IsPlaying == true;
+            _logger?.LogWarning($"Queue restore retries completed. queueCount={finalQueueCount}, isPlaying={finalIsPlaying}");
+            Debug.WriteLine($"[QueueState] Retry restore ended. queueCount={finalQueueCount}, isPlaying={finalIsPlaying}");
+        }
+
+        private async Task<bool> TryResumePlaybackAsync(IMusicPlayerService musicPlayerService, int currentIndex,
+            bool shouldResumePlayback, string savedPosition)
+        {
+            if (musicPlayerService == null || !shouldResumePlayback)
+            {
+                return false;
+            }
+
+            if (_playbackResumeTriggeredThisLaunch)
+            {
+                return _playbackResumeCompletedThisLaunch;
+            }
+
+            _playbackResumeTriggeredThisLaunch = true;
+
+            if (musicPlayerService.IsPlaying)
+            {
+                _playbackResumeCompletedThisLaunch = true;
+                return true;
+            }
+
+            for (var attempt = 1; attempt <= 10; attempt++)
+            {
+                var authService = GetService<IAuthenticationService>();
+                var hasAuth = !string.IsNullOrWhiteSpace(authService?.AccessToken) &&
+                              !string.IsNullOrWhiteSpace(authService?.ServerUrl);
+
+                if (hasAuth)
+                {
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        musicPlayerService.PlayQueueItemAt(currentIndex);
+                    }, logger: _logger);
+
+                    if (TimeSpan.TryParse(savedPosition, out var parsedPosition) &&
+                        parsedPosition > TimeSpan.Zero)
+                    {
+                        await Task.Delay(1200).ConfigureAwait(false);
+                        await UIHelper.RunOnUIThreadAsync(() =>
+                        {
+                            try
+                            {
+                                var session = musicPlayerService.MediaPlayer?.PlaybackSession;
+                                if (session != null)
+                                {
+                                    session.Position = parsedPosition;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogWarning(ex, "Failed applying restored playback position");
+                            }
+                        }, logger: _logger);
+                    }
+
+                    _logger?.LogWarning($"Playback resume triggered at queue index {currentIndex} after auth was ready");
+                    Debug.WriteLine($"[QueueState] Playback resume triggered at index {currentIndex}");
+                    _playbackResumeCompletedThisLaunch = true;
+                    return true;
+                }
+
+                Debug.WriteLine($"[QueueState] Playback resume waiting for auth (attempt {attempt})");
+                await Task.Delay(1000).ConfigureAwait(false);
+            }
+
+            _logger?.LogWarning("Playback resume skipped because auth was not ready after retries");
+            Debug.WriteLine("[QueueState] Playback resume skipped: auth not ready");
+            return false;
         }
 
         private async Task RestoreMusicQueueStateAsync()
@@ -1390,23 +1515,21 @@ namespace GelBox
             try
             {
                 var preferencesService = GetService<IPreferencesService>();
-                var authService = GetService<IAuthenticationService>();
                 var musicPlayerService = GetService<IMusicPlayerService>();
                 var apiClient = GetService<JellyfinApiClient>();
 
-                if (preferencesService == null || authService == null || musicPlayerService == null || apiClient == null)
+                if (preferencesService == null || musicPlayerService == null)
                 {
+                    _logger?.LogWarning("Queue restore skipped: required services unavailable");
+                    Debug.WriteLine("[QueueState] Restore skipped: preferences or music service unavailable");
                     return;
                 }
 
-                if (string.IsNullOrWhiteSpace(authService.AccessToken) || string.IsNullOrWhiteSpace(authService.ServerUrl))
+                var appPrefs = await preferencesService.GetAppPreferencesAsync().ConfigureAwait(false);
+                if (appPrefs?.RestorePlaybackOnLaunch == false)
                 {
-                    return;
-                }
-
-                // Don't overwrite an active in-memory queue.
-                if (musicPlayerService.Queue?.Any() == true)
-                {
+                    _logger?.LogInformation("Queue restore skipped: RestorePlaybackOnLaunch is disabled");
+                    Debug.WriteLine("[QueueState] Restore skipped: disabled in settings");
                     return;
                 }
 
@@ -1423,33 +1546,51 @@ namespace GelBox
 
                 if (queueState?.ItemIds == null || !queueState.ItemIds.Any())
                 {
+                    Debug.WriteLine("[QueueState] Restore skipped: no saved queue state found");
                     return;
                 }
 
+                var queueAlreadyPresent = musicPlayerService.Queue?.Any() == true;
                 var restoredQueue = new List<BaseItemDto>();
 
                 // Preferred restore path: use locally persisted lightweight queue item snapshots.
-                if (queueState.Items != null && queueState.Items.Any())
+                if (!queueAlreadyPresent && queueState.Items != null && queueState.Items.Any())
                 {
                     foreach (var snapshot in queueState.Items)
                     {
                         if (Guid.TryParse(snapshot?.Id, out var parsedId))
                         {
+                            Guid? albumId = null;
+                            if (Guid.TryParse(snapshot.AlbumId, out var parsedAlbumId))
+                            {
+                                albumId = parsedAlbumId;
+                            }
                             restoredQueue.Add(new BaseItemDto
                             {
                                 Id = parsedId,
                                 Name = snapshot.Name,
                                 Type = snapshot.Type,
                                 MediaType = snapshot.MediaType,
-                                AlbumArtist = snapshot.AlbumArtist
+                                AlbumArtist = snapshot.AlbumArtist,
+                                AlbumId = albumId,
+                                RunTimeTicks = snapshot.RunTimeTicks
                             });
                         }
                     }
                 }
 
                 // Backward-compatible fallback for previously saved state shape.
-                if (!restoredQueue.Any())
+                if (!queueAlreadyPresent && !restoredQueue.Any())
                 {
+                    var authService = GetService<IAuthenticationService>();
+                    if (apiClient == null || authService == null ||
+                        string.IsNullOrWhiteSpace(authService.AccessToken) ||
+                        string.IsNullOrWhiteSpace(authService.ServerUrl))
+                    {
+                        _logger?.LogWarning("Queue restore fallback skipped: auth/api unavailable for ID-based fetch");
+                        Debug.WriteLine("[QueueState] Fallback restore skipped: auth/api unavailable");
+                    }
+
                     var ids = new List<Guid>();
                     foreach (var idString in queueState.ItemIds)
                     {
@@ -1463,6 +1604,11 @@ namespace GelBox
                     {
                         try
                         {
+                            if (apiClient == null)
+                            {
+                                break;
+                            }
+
                             var item = await apiClient.Items[id].GetAsync().ConfigureAwait(false);
                             if (item != null)
                             {
@@ -1476,28 +1622,60 @@ namespace GelBox
                     }
                 }
 
-                if (!restoredQueue.Any())
+                if (!queueAlreadyPresent && !restoredQueue.Any())
                 {
+                    _logger?.LogWarning("Queue restore failed: no queue items could be restored");
+                    Debug.WriteLine("[QueueState] Restore failed: no queue items resolved");
                     return;
                 }
 
                 var currentIndex = queueState.CurrentIndex;
                 var isShuffled = queueState.IsShuffled;
 
-                currentIndex = Math.Max(0, Math.Min(currentIndex, restoredQueue.Count - 1));
-                musicPlayerService.SetQueue(restoredQueue, currentIndex);
-                musicPlayerService.SetShuffle(isShuffled);
-
-                if (appState?.PlaybackState?.IsPlaying == true)
+                if (!queueAlreadyPresent)
                 {
-                    musicPlayerService.PlayQueueItemAt(currentIndex);
+                    currentIndex = Math.Max(0, Math.Min(currentIndex, restoredQueue.Count - 1));
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        musicPlayerService.SetQueue(restoredQueue, currentIndex);
+                        musicPlayerService.SetShuffle(isShuffled);
+                    }, logger: _logger);
+
+                    _logger?.LogWarning($"Queue restored with {restoredQueue.Count} items at index {currentIndex}, shuffled={isShuffled}");
+                    Debug.WriteLine($"[QueueState] Queue restored count={restoredQueue.Count}, index={currentIndex}, shuffled={isShuffled}");
+                }
+                else
+                {
+                    currentIndex = Math.Max(0, Math.Min(musicPlayerService.CurrentQueueIndex,
+                        Math.Max(0, musicPlayerService.Queue.Count - 1)));
+                    Debug.WriteLine($"[QueueState] Restore detected existing in-memory queue. count={musicPlayerService.Queue.Count}, index={currentIndex}");
                 }
 
-                _logger?.LogInformation($"Restored music queue with {restoredQueue.Count} items at index {currentIndex}");
+                var shouldResumePlayback = queueState.WasPlaying || appState?.PlaybackState?.IsPlaying == true;
+                if (!shouldResumePlayback && !_playbackResumeTriggeredThisLaunch && !queueAlreadyPresent &&
+                    currentIndex >= 0 && (musicPlayerService.Queue?.Count ?? 0) > currentIndex)
+                {
+                    // Fallback: if we restored a concrete queue/index, resume that item to preserve playback continuity.
+                    shouldResumePlayback = true;
+                    _logger?.LogWarning("Queue restore resume fallback engaged (restored queue/index present)");
+                }
+                var savedPosition = !string.IsNullOrWhiteSpace(queueState.Position)
+                    ? queueState.Position
+                    : appState?.PlaybackState?.Position;
+
+                _logger?.LogWarning(
+                    $"Queue restore resume decision: shouldResume={shouldResumePlayback}, queueWasPlaying={queueState.WasPlaying}, appStateWasPlaying={appState?.PlaybackState?.IsPlaying == true}");
+
+                if (!_playbackResumeTriggeredThisLaunch)
+                {
+                    await TryResumePlaybackAsync(musicPlayerService, currentIndex, shouldResumePlayback, savedPosition)
+                        .ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to restore music queue state");
+                Debug.WriteLine($"[QueueState] Restore exception: {ex.Message}");
             }
         }
 
