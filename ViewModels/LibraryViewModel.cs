@@ -49,6 +49,7 @@ namespace GelBox.ViewModels
         private bool _isAscending = true;
         private bool _isLoadingMore = false;
         private bool _isRestoringViewState = false;
+        private bool _hasCompletedInitialViewStateRestore = false;
 
         private CancellationTokenSource _loadFiltersCts;
         private readonly object _loadFiltersCtsLock = new object();
@@ -137,7 +138,7 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _searchTerm, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Search");
                     }
@@ -157,7 +158,7 @@ namespace GelBox.ViewModels
 
                 if (SetProperty(ref _selectedLibrary, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_SelectedLibrary");
                     }
@@ -337,7 +338,7 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _currentFilter, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Filter");
                     }
@@ -357,7 +358,7 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _currentAlphabetFilter, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Alphabet");
                     }
@@ -373,7 +374,7 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _selectedSortIndex, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_Sort");
                         // Trigger refresh when sort changes
@@ -390,7 +391,7 @@ namespace GelBox.ViewModels
             {
                 if (SetProperty(ref _isAscending, value))
                 {
-                    if (!_isRestoringViewState)
+                    if (!_isRestoringViewState && _hasCompletedInitialViewStateRestore)
                     {
                         FireAndForget(SaveViewStateAsync, "SaveLibraryViewState_SortOrder");
                         // Trigger refresh when sort order changes
@@ -523,6 +524,7 @@ namespace GelBox.ViewModels
             await LoadFiltersAsync(cancellationToken).ConfigureAwait(false);
 
             await RestoreViewStateAsync(cancellationToken).ConfigureAwait(false);
+            _hasCompletedInitialViewStateRestore = true;
 
             cancellationToken.ThrowIfCancellationRequested();
 

@@ -72,6 +72,7 @@ namespace GelBox
         private volatile IServiceProvider _serviceProvider;
         private bool _statePersistenceEventsHooked;
         private bool _stateSavePending;
+        private bool _startupStateRestoreCompleted;
 
 
         public App()
@@ -1005,10 +1006,11 @@ namespace GelBox
                             // Visual tree check failed
                         }
 
-                        HookStatePersistenceEvents();
-
                         // Restore queued music after navigation/services are ready.
                         await RestoreMusicQueueStateAsync();
+
+                        _startupStateRestoreCompleted = true;
+                        HookStatePersistenceEvents();
                     }
 
                     // Window.Current is null
@@ -1310,6 +1312,11 @@ namespace GelBox
 
         private void QueueStateSave()
         {
+            if (!_startupStateRestoreCompleted)
+            {
+                return;
+            }
+
             if (_stateSavePending)
             {
                 return;
