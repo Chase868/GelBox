@@ -34,6 +34,15 @@ namespace GelBox
 {
     public sealed partial class App : Application
     {
+        private sealed class QueueItemSnapshot
+        {
+            public string Id { get; set; }
+            public string Name { get; set; }
+            public BaseItemDto_Type? Type { get; set; }
+            public BaseItemDto_MediaType? MediaType { get; set; }
+            public string AlbumArtist { get; set; }
+        }
+
         private sealed class PlaybackStateSnapshot
         {
             public string ItemId { get; set; }
@@ -44,6 +53,7 @@ namespace GelBox
         private sealed class MusicQueueStateSnapshot
         {
             public List<string> ItemIds { get; set; } = new();
+            public List<QueueItemSnapshot> Items { get; set; } = new();
             public int CurrentIndex { get; set; }
             public bool IsShuffled { get; set; }
         }
@@ -60,6 +70,8 @@ namespace GelBox
         private IUnifiedDeviceService _deviceInfo;
         private ILogger<App> _logger;
         private volatile IServiceProvider _serviceProvider;
+        private bool _statePersistenceEventsHooked;
+        private bool _stateSavePending;
 
 
         public App()
@@ -993,6 +1005,8 @@ namespace GelBox
                             // Visual tree check failed
                         }
 
+                        HookStatePersistenceEvents();
+
                         // Restore queued music after navigation/services are ready.
                         await RestoreMusicQueueStateAsync();
                     }
@@ -1232,11 +1246,24 @@ namespace GelBox
                         .Select(q => q.Id.Value.ToString())
                         .ToList();
 
+                    var queueItems = musicPlayerService.Queue
+                        .Where(q => q != null && q.Id.HasValue)
+                        .Select(q => new QueueItemSnapshot
+                        {
+                            Id = q.Id.Value.ToString(),
+                            Name = q.Name,
+                            Type = q.Type,
+                            MediaType = q.MediaType,
+                            AlbumArtist = q.AlbumArtist
+                        })
+                        .ToList();
+
                     if (queueItemIds.Count > 0)
                     {
                         state.MusicQueueState = new MusicQueueStateSnapshot
                         {
                             ItemIds = queueItemIds,
+                            Items = queueItems,
                             CurrentIndex = musicPlayerService.CurrentQueueIndex,
                             IsShuffled = musicPlayerService.IsShuffleMode
                         };
@@ -1251,6 +1278,60 @@ namespace GelBox
             {
                 _logger?.LogError(ex, "Failed to save application state");
             }
+        }
+
+        private void HookStatePersistenceEvents()
+        {
+            if (_statePersistenceEventsHooked)
+            {
+                return;
+            }
+
+            try
+            {
+                var musicPlayerService = GetService<IMusicPlayerService>();
+                if (musicPlayerService == null)
+                {
+                    return;
+                }
+
+                musicPlayerService.QueueChanged += (_, __) => QueueStateSave();
+                musicPlayerService.NowPlayingChanged += (_, __) => QueueStateSave();
+                musicPlayerService.ShuffleStateChanged += (_, __) => QueueStateSave();
+                musicPlayerService.RepeatModeChanged += (_, __) => QueueStateSave();
+
+                _statePersistenceEventsHooked = true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to hook state persistence events");
+            }
+        }
+
+        private void QueueStateSave()
+        {
+            if (_stateSavePending)
+            {
+                return;
+            }
+
+            _stateSavePending = true;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(500).ConfigureAwait(false);
+                    await SaveApplicationStateAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Deferred state save failed");
+                }
+                finally
+                {
+                    _stateSavePending = false;
+                }
+            });
         }
 
         private async Task RestoreMusicQueueStateAsync()
@@ -1285,34 +1366,53 @@ namespace GelBox
                     return;
                 }
 
-                var ids = new List<Guid>();
-                foreach (var idString in appState.MusicQueueState.ItemIds)
-                {
-                    if (Guid.TryParse(idString, out var guid))
-                    {
-                        ids.Add(guid);
-                    }
-                }
-
-                if (ids.Count == 0)
-                {
-                    return;
-                }
-
                 var restoredQueue = new List<BaseItemDto>();
-                foreach (var id in ids)
+
+                // Preferred restore path: use locally persisted lightweight queue item snapshots.
+                if (appState.MusicQueueState.Items != null && appState.MusicQueueState.Items.Any())
                 {
-                    try
+                    foreach (var snapshot in appState.MusicQueueState.Items)
                     {
-                        var item = await apiClient.Items[id].GetAsync().ConfigureAwait(false);
-                        if (item != null)
+                        if (Guid.TryParse(snapshot?.Id, out var parsedId))
                         {
-                            restoredQueue.Add(item);
+                            restoredQueue.Add(new BaseItemDto
+                            {
+                                Id = parsedId,
+                                Name = snapshot.Name,
+                                Type = snapshot.Type,
+                                MediaType = snapshot.MediaType,
+                                AlbumArtist = snapshot.AlbumArtist
+                            });
                         }
                     }
-                    catch (Exception ex)
+                }
+
+                // Backward-compatible fallback for previously saved state shape.
+                if (!restoredQueue.Any())
+                {
+                    var ids = new List<Guid>();
+                    foreach (var idString in appState.MusicQueueState.ItemIds)
                     {
-                        _logger?.LogDebug(ex, $"Skipping queue item restore for {id}");
+                        if (Guid.TryParse(idString, out var guid))
+                        {
+                            ids.Add(guid);
+                        }
+                    }
+
+                    foreach (var id in ids)
+                    {
+                        try
+                        {
+                            var item = await apiClient.Items[id].GetAsync().ConfigureAwait(false);
+                            if (item != null)
+                            {
+                                restoredQueue.Add(item);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogDebug(ex, $"Skipping queue item restore for {id}");
+                        }
                     }
                 }
 

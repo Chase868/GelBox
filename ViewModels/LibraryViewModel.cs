@@ -518,8 +518,6 @@ namespace GelBox.ViewModels
                 await LoadLibrariesAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            await RestoreViewStateAsync(cancellationToken).ConfigureAwait(false);
-
             cancellationToken.ThrowIfCancellationRequested();
 
             await LoadFiltersAsync(cancellationToken).ConfigureAwait(false);
@@ -1904,70 +1902,73 @@ namespace GelBox.ViewModels
                     return;
                 }
 
-                _isRestoringViewState = true;
-                try
+                await RunOnUIThreadAsync(() =>
                 {
-                    if (savedState.SelectedLibraryId.HasValue && Libraries.Any())
+                    _isRestoringViewState = true;
+                    try
                     {
-                        var restoredLibrary = Libraries.FirstOrDefault(l => l.Id == savedState.SelectedLibraryId.Value);
-                        if (restoredLibrary != null && SelectedLibrary?.Id != restoredLibrary.Id)
+                        if (savedState.SelectedLibraryId.HasValue && Libraries.Any())
                         {
-                            SelectedLibrary = restoredLibrary;
+                            var restoredLibrary = Libraries.FirstOrDefault(l => l.Id == savedState.SelectedLibraryId.Value);
+                            if (restoredLibrary != null && SelectedLibrary?.Id != restoredLibrary.Id)
+                            {
+                                SelectedLibrary = restoredLibrary;
+                            }
                         }
+
+                        CurrentFilter = string.IsNullOrWhiteSpace(savedState.CurrentFilter) ? "All" : savedState.CurrentFilter;
+                        CurrentAlphabetFilter = savedState.CurrentAlphabetFilter ?? string.Empty;
+                        SelectedSortIndex = savedState.SelectedSortIndex;
+                        IsAscending = savedState.IsAscending;
+                        SearchTerm = savedState.SearchTerm ?? string.Empty;
+
+                        if (Genres.Any())
+                        {
+                            foreach (var genre in Genres)
+                            {
+                                genre.IsSelected = savedState.SelectedGenres?.Contains(genre.Value) == true;
+                            }
+                        }
+
+                        if (Years.Any())
+                        {
+                            foreach (var year in Years)
+                            {
+                                year.IsSelected = savedState.SelectedYears?.Contains(year.Value) == true;
+                            }
+                        }
+
+                        if (Ratings.Any())
+                        {
+                            foreach (var rating in Ratings)
+                            {
+                                rating.IsSelected = savedState.SelectedRatings?.Contains(rating.Value) == true;
+                            }
+                        }
+
+                        if (Resolutions.Any())
+                        {
+                            foreach (var resolution in Resolutions)
+                            {
+                                resolution.IsSelected = savedState.SelectedResolutions?.Contains(resolution.Value) == true;
+                            }
+                        }
+
+                        if (PlayedStatuses.Any())
+                        {
+                            foreach (var status in PlayedStatuses)
+                            {
+                                status.IsSelected = savedState.SelectedPlayedStatuses?.Contains(status.Value) == true;
+                            }
+                        }
+
+                        InvalidateFilterCountCache();
                     }
-
-                    CurrentFilter = string.IsNullOrWhiteSpace(savedState.CurrentFilter) ? "All" : savedState.CurrentFilter;
-                    CurrentAlphabetFilter = savedState.CurrentAlphabetFilter ?? string.Empty;
-                    SelectedSortIndex = savedState.SelectedSortIndex;
-                    IsAscending = savedState.IsAscending;
-                    SearchTerm = savedState.SearchTerm ?? string.Empty;
-                }
-                finally
-                {
-                    _isRestoringViewState = false;
-                }
-
-                if (Genres.Any())
-                {
-                    foreach (var genre in Genres)
+                    finally
                     {
-                        genre.IsSelected = savedState.SelectedGenres?.Contains(genre.Value) == true;
+                        _isRestoringViewState = false;
                     }
-                }
-
-                if (Years.Any())
-                {
-                    foreach (var year in Years)
-                    {
-                        year.IsSelected = savedState.SelectedYears?.Contains(year.Value) == true;
-                    }
-                }
-
-                if (Ratings.Any())
-                {
-                    foreach (var rating in Ratings)
-                    {
-                        rating.IsSelected = savedState.SelectedRatings?.Contains(rating.Value) == true;
-                    }
-                }
-
-                if (Resolutions.Any())
-                {
-                    foreach (var resolution in Resolutions)
-                    {
-                        resolution.IsSelected = savedState.SelectedResolutions?.Contains(resolution.Value) == true;
-                    }
-                }
-
-                if (PlayedStatuses.Any())
-                {
-                    foreach (var status in PlayedStatuses)
-                    {
-                        status.IsSelected = savedState.SelectedPlayedStatuses?.Contains(status.Value) == true;
-                    }
-                }
-
-                InvalidateFilterCountCache();
+                });
             }
             catch (OperationCanceledException)
             {
