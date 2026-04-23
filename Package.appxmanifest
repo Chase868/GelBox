@@ -9,7 +9,7 @@
   <Identity
     Name="ChaseDavenport.GelBox"
     Publisher="CN=26651B81-5292-4421-ACAF-009B89230B8E"
-    Version="1.0.3.0" />
+    Version="1.0.4.0" />
 
   <mp:PhoneIdentity PhoneProductId="c367e7a4-6358-4d3d-a576-2169d2d7fc40" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
 
