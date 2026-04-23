@@ -385,6 +385,7 @@ namespace GelBox.Services
     {
         MediaPlayer MediaPlayer { get; }
         bool IsPlaying { get; }
+        bool IsPlaybackTransitioning { get; }
         BaseItemDto CurrentItem { get; }
         List<BaseItemDto> Queue { get; }
         bool IsRepeatOne { get; }

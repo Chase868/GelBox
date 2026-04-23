@@ -20,6 +20,7 @@ using Microsoft.Kiota.Abstractions.Authentication;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Core;
+using Windows.Media.Playback;
 using Windows.UI.Core;
 using Windows.UI.Popups;
 using Windows.UI.Text;
@@ -1141,7 +1142,7 @@ namespace GelBox
             {
                 _logger?.LogInformation("App entered background");
                 await HandleMediaPlayerBackgroundChangedAsync(true);
-                if (!IsMusicPlaying())
+                if (!ShouldKeepAppAliveForBackgroundAudio())
                 {
                     _logger?.LogInformation("No music playing - saving state and exiting for background transition");
                     await SaveMusicQueueStateAsync();
@@ -1202,10 +1203,22 @@ namespace GelBox
             return Window.Current?.Content as Frame;
         }
 
-        private bool IsMusicPlaying()
+        private bool ShouldKeepAppAliveForBackgroundAudio()
         {
             var musicPlayerService = GetService<IMusicPlayerService>();
-            return musicPlayerService?.IsPlaying == true;
+            if (musicPlayerService == null)
+            {
+                return false;
+            }
+
+            if (musicPlayerService.IsPlaying || musicPlayerService.IsPlaybackTransitioning)
+            {
+                return true;
+            }
+
+            var playbackState = musicPlayerService.MediaPlayer?.PlaybackSession?.PlaybackState ?? MediaPlaybackState.None;
+            return playbackState == MediaPlaybackState.Opening ||
+                   playbackState == MediaPlaybackState.Buffering;
         }
 
         private async Task ExitAppAsync()

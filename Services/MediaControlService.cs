@@ -354,7 +354,18 @@ namespace GelBox.Services
 
         private void OnMediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
         {
-            Logger.LogError($"Media playback failed: {args.Error} - {args.ErrorMessage}");
+            var isRecoverableSourceNotSupported =
+                args.Error == MediaPlayerError.SourceNotSupported &&
+                CurrentItem?.Type == BaseItemDto_Type.Audio;
+
+            if (isRecoverableSourceNotSupported)
+            {
+                Logger.LogWarning($"Media playback failed (recoverable): {args.Error} - {args.ErrorMessage}");
+            }
+            else
+            {
+                Logger.LogError($"Media playback failed: {args.Error} - {args.ErrorMessage}");
+            }
             MediaFailed?.Invoke(sender, args);
         }
 

@@ -68,138 +68,120 @@ namespace GelBox.Services
         public void SetQueue(List<BaseItemDto> items, int startIndex = 0)
         {
             var context = CreateErrorContext("SetQueue", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                if (items == null || !items.Any())
                 {
-                    if (items == null || !items.Any())
-                    {
-                        Logger.LogWarning("SetQueue called with null or empty items");
-                        return;
-                    }
-
-                    Queue.Clear();
-                    Queue.AddRange(items);
-                    CurrentQueueIndex = Math.Max(0, Math.Min(startIndex, items.Count - 1));
-
-                    Logger.LogInformation($"Queue set with {items.Count} items, starting at index {CurrentQueueIndex}");
-
-                    if (IsShuffleMode && Queue.Count > 1)
-                    {
-                        CreateShuffledIndices();
-                    }
-
-                    QueueChanged?.Invoke(this, Queue);
-                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
-                    await Task.CompletedTask;
+                    Logger.LogWarning("SetQueue called with null or empty items");
+                    return;
                 }
-                catch (Exception ex)
+
+                Queue.Clear();
+                Queue.AddRange(items);
+                CurrentQueueIndex = Math.Max(0, Math.Min(startIndex, items.Count - 1));
+
+                Logger.LogInformation($"Queue set with {items.Count} items, starting at index {CurrentQueueIndex}");
+
+                if (IsShuffleMode && Queue.Count > 1)
                 {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                    CreateShuffledIndices();
                 }
-            });
+
+                QueueChanged?.Invoke(this, Queue);
+                QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public void AddToQueue(BaseItemDto item)
         {
             var context = CreateErrorContext("AddToQueue", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                if (item != null)
                 {
-                    if (item != null)
+                    Queue.Add(item);
+
+                    if (CurrentQueueIndex == -1)
                     {
-                        Queue.Add(item);
-
-                        if (CurrentQueueIndex == -1)
-                        {
-                            CurrentQueueIndex = 0;
-                            QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
-                        }
-
-                        _lastQueueHash = 0;
-                        QueueChanged?.Invoke(this, Queue);
+                        CurrentQueueIndex = 0;
+                        QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
                     }
 
-                    await Task.CompletedTask;
+                    _lastQueueHash = 0;
+                    QueueChanged?.Invoke(this, Queue);
                 }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public void AddToQueueNext(BaseItemDto item)
         {
             var context = CreateErrorContext("AddToQueueNext", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                if (item != null && CurrentQueueIndex >= 0)
                 {
-                    if (item != null && CurrentQueueIndex >= 0)
+                    var insertQueueIndex = CurrentQueueIndex + 1;
+                    Queue.Insert(insertQueueIndex, item);
+
+                    // Keep shuffle order in sync so "Play Next" is actually next while shuffled.
+                    if (IsShuffleMode)
                     {
-                        var insertQueueIndex = CurrentQueueIndex + 1;
-                        Queue.Insert(insertQueueIndex, item);
-
-                        // Keep shuffle order in sync so "Play Next" is actually next while shuffled.
-                        if (IsShuffleMode)
+                        if (ShuffledIndices?.Any() == true)
                         {
-                            if (ShuffledIndices?.Any() == true)
+                            for (var i = 0; i < ShuffledIndices.Count; i++)
                             {
-                                for (var i = 0; i < ShuffledIndices.Count; i++)
+                                if (ShuffledIndices[i] >= insertQueueIndex)
                                 {
-                                    if (ShuffledIndices[i] >= insertQueueIndex)
-                                    {
-                                        ShuffledIndices[i]++;
-                                    }
+                                    ShuffledIndices[i]++;
                                 }
+                            }
 
-                                var insertShuffleIndex = Math.Max(0,
-                                    Math.Min(CurrentShuffleIndex + 1, ShuffledIndices.Count));
-                                ShuffledIndices.Insert(insertShuffleIndex, insertQueueIndex);
-                            }
-                            else if (Queue.Count > 1)
-                            {
-                                CreateShuffledIndices();
-                            }
+                            var insertShuffleIndex = Math.Max(0,
+                                Math.Min(CurrentShuffleIndex + 1, ShuffledIndices.Count));
+                            ShuffledIndices.Insert(insertShuffleIndex, insertQueueIndex);
                         }
-
-                        _lastQueueHash = 0;
-                        QueueChanged?.Invoke(this, Queue);
+                        else if (Queue.Count > 1)
+                        {
+                            CreateShuffledIndices();
+                        }
                     }
 
-                    await Task.CompletedTask;
+                    _lastQueueHash = 0;
+                    QueueChanged?.Invoke(this, Queue);
                 }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public void ClearQueue()
         {
             var context = CreateErrorContext("ClearQueue", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
-                {
-                    Queue.Clear();
-                    CurrentQueueIndex = -1;
-                    ShuffledIndices = null;
-                    _lastQueueHash = 0;
-                    CurrentShuffleIndex = 0;
+                Queue.Clear();
+                CurrentQueueIndex = -1;
+                ShuffledIndices = null;
+                _lastQueueHash = 0;
+                CurrentShuffleIndex = 0;
 
-                    QueueChanged?.Invoke(this, Queue);
-                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
-                    await Task.CompletedTask;
-                }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
+                QueueChanged?.Invoke(this, Queue);
+                QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public void RemoveFromQueue(int index)
@@ -240,76 +222,66 @@ namespace GelBox.Services
         public void SetCurrentIndex(int index)
         {
             var context = CreateErrorContext("SetCurrentIndex", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                if (index >= 0 && index < Queue.Count)
                 {
-                    if (index >= 0 && index < Queue.Count)
+                    CurrentQueueIndex = index;
+
+                    if (IsShuffleMode && ShuffledIndices != null)
                     {
-                        CurrentQueueIndex = index;
-
-                        if (IsShuffleMode && ShuffledIndices != null)
+                        CurrentShuffleIndex = ShuffledIndices.IndexOf(index);
+                        if (CurrentShuffleIndex == -1)
                         {
-                            CurrentShuffleIndex = ShuffledIndices.IndexOf(index);
-                            if (CurrentShuffleIndex == -1)
-                            {
-                                CurrentShuffleIndex = 0;
-                            }
+                            CurrentShuffleIndex = 0;
                         }
-
-                        QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
                     }
 
-                    await Task.CompletedTask;
+                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
                 }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public void SetShuffle(bool enabled)
         {
             var context = CreateErrorContext("SetShuffle", ErrorCategory.Media);
-            FireAndForget(async () =>
+            try
             {
-                try
+                IsShuffleMode = enabled;
+                Logger.LogInformation($"Shuffle mode set to: {(IsShuffleMode ? "On" : "Off")}");
+
+                if (IsShuffleMode && Queue.Count > 1)
                 {
-                    IsShuffleMode = enabled;
-                    Logger.LogInformation($"Shuffle mode set to: {(IsShuffleMode ? "On" : "Off")}");
-
-                    if (IsShuffleMode && Queue.Count > 1)
+                    if (ValidateShuffledIndices(ShuffledIndices))
                     {
-                        if (ValidateShuffledIndices(ShuffledIndices))
+                        CurrentShuffleIndex = ShuffledIndices.IndexOf(CurrentQueueIndex);
+                        if (CurrentShuffleIndex == -1)
                         {
-                            CurrentShuffleIndex = ShuffledIndices.IndexOf(CurrentQueueIndex);
-                            if (CurrentShuffleIndex == -1)
-                            {
-                                CurrentShuffleIndex = 0;
-                            }
+                            CurrentShuffleIndex = 0;
+                        }
 
-                            _lastQueueHash = GetQueueHash();
-                            Logger.LogInformation("Preserving existing shuffle indices");
-                        }
-                        else
-                        {
-                            CreateShuffledIndices();
-                        }
+                        _lastQueueHash = GetQueueHash();
+                        Logger.LogInformation("Preserving existing shuffle indices");
                     }
                     else
                     {
-                        ShuffledIndices = null;
-                        CurrentShuffleIndex = 0;
+                        CreateShuffledIndices();
                     }
-
-                    await Task.CompletedTask;
                 }
-                catch (Exception ex)
+                else
                 {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                    ShuffledIndices = null;
+                    CurrentShuffleIndex = 0;
                 }
-            });
+            }
+            catch (Exception ex)
+            {
+                FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
         }
 
         public bool RestoreShuffleState(List<int> shuffledIndices, int currentShuffleIndex)

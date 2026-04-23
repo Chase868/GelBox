@@ -32,11 +32,19 @@ namespace GelBox.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly IUserProfileService _userProfileService;
         private readonly IVolumeNormalizationService _volumeNormalizationService;
+        private readonly SemaphoreSlim _playbackTransitionSemaphore = new SemaphoreSlim(1, 1);
+        private static readonly HashSet<string> ForceTranscodeAudioContainers =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ogg", "opus", "oga", "webm" };
+        private static readonly HashSet<string> ForceTranscodeAudioCodecs =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "opus" };
         private MediaSourceInfo _currentMediaSource;
         private string _currentPlaySessionId;
         private bool _isInFallbackMode = false;
         private SystemMediaTransportControls _systemMediaTransportControls;
         private DateTime _smtcSuppressStoppedUntilUtc = DateTime.MinValue;
+        private Guid? _lastRecoveredFailureItemId;
+        private DateTime _lastRecoveredFailureUtc = DateTime.MinValue;
+        private int _pendingPlaybackTransitions;
 
         private DateTime _lastPlaybackStartTime = DateTime.MinValue;
         private CancellationTokenSource _playbackCancellationTokenSource;
@@ -80,6 +88,7 @@ namespace GelBox.Services
 
         public MediaPlayer MediaPlayer => _mediaControlService.MediaPlayer;
         public bool IsPlaying => _mediaControlService.IsPlaying;
+        public bool IsPlaybackTransitioning => Volatile.Read(ref _pendingPlaybackTransitions) > 0;
         public BaseItemDto CurrentItem => _mediaControlService.CurrentItem;
         public List<BaseItemDto> Queue => _queueService.Queue;
         public int CurrentQueueIndex => _queueService.CurrentQueueIndex;
@@ -134,7 +143,9 @@ namespace GelBox.Services
             var context = CreateErrorContext("PlayItem", ErrorCategory.Media);
             try
             {
-                await PlayCurrentQueueItem(item, mediaSource).ConfigureAwait(false);
+                await RunSerializedPlaybackTransitionAsync(
+                    () => PlayCurrentQueueItem(item, mediaSource),
+                    "PlayItem").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -158,23 +169,26 @@ namespace GelBox.Services
                     Logger.LogInformation($"  Queue[{i}]: {items[i].Name} (ID: {items[i].Id})");
                 }
 
-                _queueService.SetQueue(items, startIndex);
-
-                // Reset repeat-one when a new queue is built
-                if (_mediaControlService.RepeatMode == RepeatMode.One)
+                await RunSerializedPlaybackTransitionAsync(async () =>
                 {
-                    Logger.LogInformation("Resetting repeat-one mode for new queue");
-                    _mediaControlService.SetRepeatMode(RepeatMode.None);
-                    SetRepeatMode(RepeatMode.None);
-                    UpdateTransportControlsState();
-                    RepeatModeChanged?.Invoke(this, RepeatMode.None);
-                }
+                    _queueService.SetQueue(items, startIndex);
 
-                if (_queueService.CurrentQueueIndex >= 0 && _queueService.CurrentQueueIndex < _queueService.Queue.Count)
-                {
-                    // Play the item at the current queue index
-                    await PlayItem(_queueService.Queue[_queueService.CurrentQueueIndex]).ConfigureAwait(false);
-                }
+                    // Reset repeat-one when a new queue is built
+                    if (_mediaControlService.RepeatMode == RepeatMode.One)
+                    {
+                        Logger.LogInformation("Resetting repeat-one mode for new queue");
+                        _mediaControlService.SetRepeatMode(RepeatMode.None);
+                        SetRepeatMode(RepeatMode.None);
+                        UpdateTransportControlsState();
+                        RepeatModeChanged?.Invoke(this, RepeatMode.None);
+                    }
+
+                    if (_queueService.CurrentQueueIndex >= 0 && _queueService.CurrentQueueIndex < _queueService.Queue.Count)
+                    {
+                        await PlayCurrentQueueItem(_queueService.Queue[_queueService.CurrentQueueIndex])
+                            .ConfigureAwait(false);
+                    }
+                }, "PlayItems").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -209,8 +223,7 @@ namespace GelBox.Services
                 return;
             }
 
-            _queueService.SetCurrentIndex(index);
-            FireAndForget(() => PlayItem(_queueService.Queue[index]), "PlayQueueItemAt");
+            FireAndForget(() => PlayQueueItemAtAsync(index), "PlayQueueItemAt");
         }
 
         public void Stop()
@@ -319,58 +332,203 @@ namespace GelBox.Services
 
         public void SkipNext()
         {
-            var context = CreateErrorContext("SkipNext", ErrorCategory.Media);
-            FireAndForget(async () =>
-            {
-                try
-                {
-                    if (!_queueService.Queue.Any())
-                    {
-                        return;
-                    }
-
-                    var nextIndex = _queueService.GetNextIndex(_mediaControlService.RepeatMode == RepeatMode.All);
-                    if (nextIndex >= 0)
-                    {
-                        _queueService.SetCurrentIndex(nextIndex);
-                        FireAndForget(() => PlayItem(_queueService.Queue[nextIndex]), "PlayItem");
-                    }
-
-                    await Task.CompletedTask;
-                }
-                catch (Exception ex)
-                {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
-                }
-            });
+            FireAndForget(() => SkipNextAsync(), "SkipNext");
         }
 
         public void SkipPrevious()
         {
-            var context = CreateErrorContext("SkipPrevious", ErrorCategory.Media);
-            FireAndForget(async () =>
+            FireAndForget(() => SkipPreviousAsync(), "SkipPrevious");
+        }
+
+        private async Task PlayQueueItemAtAsync(int index)
+        {
+            var context = CreateErrorContext("PlayQueueItemAtAsync", ErrorCategory.Media);
+            try
             {
-                try
+                await RunSerializedPlaybackTransitionAsync(async () =>
                 {
-                    if (!_queueService.Queue.Any())
+                    if (index < 0 || index >= _queueService.Queue.Count)
                     {
                         return;
                     }
 
-                    var prevIndex = _queueService.GetPreviousIndex(_mediaControlService.RepeatMode == RepeatMode.All);
-                    if (prevIndex >= 0)
+                    _queueService.SetCurrentIndex(index);
+                    await PlayCurrentQueueItem(_queueService.Queue[index]).ConfigureAwait(false);
+                }, "PlayQueueItemAt").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
+            }
+        }
+
+        private async Task SkipNextAsync()
+        {
+            var context = CreateErrorContext("SkipNextAsync", ErrorCategory.Media);
+            try
+            {
+                await RunSerializedPlaybackTransitionAsync(
+                    () => AdvanceToQueueBoundaryItemAsync(true, "skip-next", true),
+                    "SkipNext").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
+            }
+        }
+
+        private async Task SkipPreviousAsync()
+        {
+            var context = CreateErrorContext("SkipPreviousAsync", ErrorCategory.Media);
+            try
+            {
+                await RunSerializedPlaybackTransitionAsync(
+                    () => AdvanceToQueueBoundaryItemAsync(false, "skip-previous", true),
+                    "SkipPrevious").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
+            }
+        }
+
+        private async Task<bool> AdvanceToQueueBoundaryItemAsync(bool moveNext, string reason,
+            bool stopExistingPlaybackReporting)
+        {
+            if (!_queueService.Queue.Any())
+            {
+                Logger.LogInformation("Cannot advance queue during {Reason} - queue is empty", reason);
+                return false;
+            }
+
+            var targetIndex = moveNext
+                ? _queueService.GetNextIndex(_mediaControlService.RepeatMode == RepeatMode.All)
+                : _queueService.GetPreviousIndex(_mediaControlService.RepeatMode == RepeatMode.All);
+
+            if (targetIndex < 0 || targetIndex >= _queueService.Queue.Count)
+            {
+                Logger.LogInformation(
+                    "No queue item available while handling {Reason}. QueueIndex={QueueIndex}, QueueCount={QueueCount}",
+                    reason,
+                    _queueService.CurrentQueueIndex,
+                    _queueService.Queue.Count);
+                UpdateTransportControlsState();
+                return false;
+            }
+
+            _queueService.SetCurrentIndex(targetIndex);
+
+            var targetItem = _queueService.Queue[targetIndex];
+            Logger.LogInformation(
+                "Transitioning queue to index {TargetIndex} during {Reason}: {ItemName}",
+                targetIndex,
+                reason,
+                targetItem?.Name);
+
+            await PlayCurrentQueueItem(targetItem, stopExistingPlaybackReporting: stopExistingPlaybackReporting)
+                .ConfigureAwait(false);
+            return true;
+        }
+
+        private async Task RecoverFromMediaFailureAsync(BaseItemDto currentItem, MediaPlayerError error)
+        {
+            var context = CreateErrorContext("RecoverFromMediaFailureAsync", ErrorCategory.Media);
+            try
+            {
+                await RunSerializedPlaybackTransitionAsync(async () =>
+                {
+                    await StopPlaybackReporting().ConfigureAwait(false);
+
+                    if (ShouldRetryFailedItem(currentItem))
                     {
-                        _queueService.SetCurrentIndex(prevIndex);
-                        FireAndForget(() => PlayItem(_queueService.Queue[prevIndex]), "PlayItem");
+                        Logger.LogWarning(
+                            "Retrying failed audio item once after media failure {Error}: {ItemName}",
+                            error,
+                            currentItem?.Name);
+                        _smtcSuppressStoppedUntilUtc = DateTime.UtcNow.AddSeconds(3);
+                        await PlayCurrentQueueItem(currentItem, stopExistingPlaybackReporting: false)
+                            .ConfigureAwait(false);
+                        return;
                     }
 
-                    await Task.CompletedTask;
-                }
-                catch (Exception ex)
+                    Logger.LogWarning(
+                        "Retry already attempted for {ItemName}; advancing queue after media failure {Error}",
+                        currentItem?.Name,
+                        error);
+
+                    var recovered = await AdvanceToQueueBoundaryItemAsync(
+                        true,
+                        "media-failed",
+                        stopExistingPlaybackReporting: false).ConfigureAwait(false);
+
+                    if (!recovered)
+                    {
+                        Logger.LogWarning(
+                            "Media failure recovery exhausted for {ItemName}; no follow-up queue item was available",
+                            currentItem?.Name);
+                    }
+                }, "RecoverFromMediaFailure").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
+            }
+        }
+
+        private bool ShouldRetryFailedItem(BaseItemDto item)
+        {
+            if (item?.Id == null)
+            {
+                return false;
+            }
+
+            var now = DateTime.UtcNow;
+            if (_lastRecoveredFailureItemId == item.Id &&
+                now - _lastRecoveredFailureUtc < TimeSpan.FromMinutes(1))
+            {
+                return false;
+            }
+
+            _lastRecoveredFailureItemId = item.Id;
+            _lastRecoveredFailureUtc = now;
+            return true;
+        }
+
+        private void ResetFailureRecoveryState(Guid? itemId)
+        {
+            if (!itemId.HasValue || _lastRecoveredFailureItemId != itemId)
+            {
+                return;
+            }
+
+            _lastRecoveredFailureItemId = null;
+            _lastRecoveredFailureUtc = DateTime.MinValue;
+        }
+
+        private async Task RunSerializedPlaybackTransitionAsync(Func<Task> transition, string operationName)
+        {
+            Interlocked.Increment(ref _pendingPlaybackTransitions);
+            try
+            {
+                await _playbackTransitionSemaphore.WaitAsync().ConfigureAwait(false);
+                try
                 {
-                    await ErrorHandler.HandleErrorAsync(ex, context, false);
+                    await transition().ConfigureAwait(false);
                 }
-            });
+                finally
+                {
+                    _playbackTransitionSemaphore.Release();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Serialized playback transition failed during {OperationName}", operationName);
+                throw;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _pendingPlaybackTransitions);
+            }
         }
 
         public void SeekForward(int seconds)
@@ -699,6 +857,8 @@ namespace GelBox.Services
         private void OnMediaOpened(object sender, object args)
         {
             Logger.LogInformation("Media opened successfully");
+
+            ResetFailureRecoveryState(_mediaControlService.CurrentItem?.Id);
 
             // Initialize SMTC only when MUSIC starts playing (not for video)
             var currentItem = _mediaControlService.CurrentItem;
@@ -1098,55 +1258,109 @@ namespace GelBox.Services
         {
             try
             {
-                Logger.LogError("=== Media Playback Failed ===");
-                Logger.LogError($"  Error: {args.Error}");
-                Logger.LogError($"  ErrorMessage: {args.ErrorMessage}");
-                Logger.LogError(
-                    $"  PlaybackSession State: {_mediaControlService.MediaPlayer.PlaybackSession?.PlaybackState}");
-                Logger.LogError(
-                    $"  Position when failed: {_mediaControlService.MediaPlayer.PlaybackSession?.Position}");
-
                 // Log additional details about the failure
                 var currentItem = _mediaControlService.CurrentItem;
+                var isRecoverableSourceNotSupported =
+                    args.Error == MediaPlayerError.SourceNotSupported &&
+                    currentItem?.Type == BaseItemDto_Type.Audio;
+
+                if (isRecoverableSourceNotSupported)
+                {
+                    Logger.LogWarning("=== Media Playback Failed (recoverable) ===");
+                    Logger.LogWarning($"  Error: {args.Error}");
+                    Logger.LogWarning($"  ErrorMessage: {args.ErrorMessage}");
+                    Logger.LogWarning(
+                        $"  PlaybackSession State: {_mediaControlService.MediaPlayer.PlaybackSession?.PlaybackState}");
+                    Logger.LogWarning(
+                        $"  Position when failed: {_mediaControlService.MediaPlayer.PlaybackSession?.Position}");
+                }
+                else
+                {
+                    Logger.LogError("=== Media Playback Failed ===");
+                    Logger.LogError($"  Error: {args.Error}");
+                    Logger.LogError($"  ErrorMessage: {args.ErrorMessage}");
+                    Logger.LogError(
+                        $"  PlaybackSession State: {_mediaControlService.MediaPlayer.PlaybackSession?.PlaybackState}");
+                    Logger.LogError(
+                        $"  Position when failed: {_mediaControlService.MediaPlayer.PlaybackSession?.Position}");
+                }
+
                 if (currentItem != null)
                 {
-                    Logger.LogError("Failed item details:");
-                    Logger.LogError($"  Name: {currentItem.Name}");
-                    Logger.LogError($"  ID: {currentItem.Id}");
-                    Logger.LogError($"  Type: {currentItem.Type}");
-                    Logger.LogError($"  Container: {currentItem.Container}");
-                    Logger.LogError($"  Path: {currentItem.Path}");
+                    if (isRecoverableSourceNotSupported)
+                    {
+                        Logger.LogWarning("Failed item details:");
+                        Logger.LogWarning($"  Name: {currentItem.Name}");
+                        Logger.LogWarning($"  ID: {currentItem.Id}");
+                        Logger.LogWarning($"  Type: {currentItem.Type}");
+                        Logger.LogWarning($"  Container: {currentItem.Container}");
+                        Logger.LogWarning($"  Path: {currentItem.Path}");
+                    }
+                    else
+                    {
+                        Logger.LogError("Failed item details:");
+                        Logger.LogError($"  Name: {currentItem.Name}");
+                        Logger.LogError($"  ID: {currentItem.Id}");
+                        Logger.LogError($"  Type: {currentItem.Type}");
+                        Logger.LogError($"  Container: {currentItem.Container}");
+                        Logger.LogError($"  Path: {currentItem.Path}");
+                    }
 
                     // Log media source details if available
                     if (_mediaControlService.MediaPlayer?.Source is MediaPlaybackItem playbackItem)
                     {
                         var source = playbackItem.Source;
-                        Logger.LogError($"  Media source URI: {source?.Uri}");
-                        Logger.LogError($"  Audio tracks in item: {playbackItem.AudioTracks?.Count ?? 0}");
+                        if (isRecoverableSourceNotSupported)
+                        {
+                            Logger.LogWarning($"  Media source URI: {source?.Uri}");
+                            Logger.LogWarning($"  Audio tracks in item: {playbackItem.AudioTracks?.Count ?? 0}");
+                        }
+                        else
+                        {
+                            Logger.LogError($"  Media source URI: {source?.Uri}");
+                            Logger.LogError($"  Audio tracks in item: {playbackItem.AudioTracks?.Count ?? 0}");
+                        }
                     }
 
                     // Log timing of failure
                     var timeSinceStart = DateTime.UtcNow - _lastPlaybackStartTime;
-                    Logger.LogError($"  Time since playback start: {timeSinceStart.TotalMilliseconds}ms");
+                    if (isRecoverableSourceNotSupported)
+                    {
+                        Logger.LogWarning($"  Time since playback start: {timeSinceStart.TotalMilliseconds}ms");
+                    }
+                    else
+                    {
+                        Logger.LogError($"  Time since playback start: {timeSinceStart.TotalMilliseconds}ms");
+                    }
 
                     // For any media type, if source not supported, provide detailed guidance
                     if (args.Error == MediaPlayerError.SourceNotSupported)
                     {
-                        Logger.LogError("Media source not supported by Xbox decoder");
-                        Logger.LogError("Common causes:");
-                        Logger.LogError("  - FLAC/MP3/M4A files with embedded artwork >1500x1500 pixels");
-                        Logger.LogError("  - Video files with incompatible codecs or high-res poster frames");
-                        Logger.LogError("Solutions:");
-                        Logger.LogError("  - Re-encode media with smaller/no embedded artwork");
-                        Logger.LogError("  - Strip metadata with tools like FFmpeg or Mp3tag");
+                        Logger.LogWarning("Media source not supported by Xbox decoder");
+                        Logger.LogWarning("Common causes:");
+                        Logger.LogWarning("  - OGG/Opus direct streams are rejected by the Xbox decoder");
+                        Logger.LogWarning("  - FLAC/MP3/M4A files with embedded artwork >1500x1500 pixels");
+                        Logger.LogWarning("  - Video files with incompatible codecs or high-res poster frames");
+                        Logger.LogWarning("Solutions:");
+                        Logger.LogWarning("  - Force server-side transcoding for unsupported containers/codecs");
+                        Logger.LogWarning("  - Re-encode media with smaller/no embedded artwork");
+                        Logger.LogWarning("  - Strip metadata with tools like FFmpeg or Mp3tag");
 
                         // Automatically attempt fallback for audio files
                         if (currentItem?.Type == BaseItemDto_Type.Audio && !_isInFallbackMode)
                         {
                             Logger.LogInformation("Attempting automatic transcoding fallback for audio playback");
-                            _smtcSuppressStoppedUntilUtc = DateTime.UtcNow.AddSeconds(3);
-                            await PlayItemWithTranscodingFallback(currentItem).ConfigureAwait(false);
+                            await RunSerializedPlaybackTransitionAsync(async () =>
+                            {
+                                _smtcSuppressStoppedUntilUtc = DateTime.UtcNow.AddSeconds(3);
+                                await StopPlaybackReporting().ConfigureAwait(false);
+                                await PlayItemWithTranscodingFallback(currentItem).ConfigureAwait(false);
+                            }, "MediaFailedFallback").ConfigureAwait(false);
                         }
+                    }
+                    else if (currentItem?.Type == BaseItemDto_Type.Audio)
+                    {
+                        await RecoverFromMediaFailureAsync(currentItem, args.Error).ConfigureAwait(false);
                     }
                 }
             }
@@ -1163,26 +1377,31 @@ namespace GelBox.Services
 
             Logger.LogInformation($"Audio playback ended - RepeatMode: {repeatMode}, CurrentItem: {currentItem?.Name}");
 
-            // Stop playback reporting for the ended track
-            FireAndForgetSafe(() => StopPlaybackReporting(), "StopPlaybackReporting");
-
             var context = CreateErrorContext("OnMediaEnded", ErrorCategory.Media);
             FireAndForget(async () =>
             {
                 try
                 {
-                    if (repeatMode == RepeatMode.One)
+                    await RunSerializedPlaybackTransitionAsync(async () =>
                     {
-                        // Repeat the current track
-                        Logger.LogInformation($"Repeating current track: {currentItem?.Name}");
-                        FireAndForgetSafe(() => PlayItem(currentItem), "PlayItem-RepeatOne");
-                    }
-                    else
-                    {
-                        Logger.LogInformation("Not in repeat one mode, calling SkipNext");
-                        // Use SkipNext which handles shuffle and repeat all
-                        SkipNext();
-                    }
+                        await StopPlaybackReporting().ConfigureAwait(false);
+
+                        if (repeatMode == RepeatMode.One)
+                        {
+                            // Repeat the current track
+                            Logger.LogInformation($"Repeating current track: {currentItem?.Name}");
+                            await PlayCurrentQueueItem(currentItem, stopExistingPlaybackReporting: false)
+                                .ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            Logger.LogInformation("Not in repeat one mode, calling SkipNext");
+                            await AdvanceToQueueBoundaryItemAsync(
+                                moveNext: true,
+                                reason: "media-ended",
+                                stopExistingPlaybackReporting: false).ConfigureAwait(false);
+                        }
+                    }, "OnMediaEnded").ConfigureAwait(false);
 
                     await Task.CompletedTask;
                 }
@@ -1194,7 +1413,8 @@ namespace GelBox.Services
         }
 
 
-        private async Task PlayCurrentQueueItem(BaseItemDto item, MediaSourceInfo mediaSource = null)
+        private async Task PlayCurrentQueueItem(BaseItemDto item, MediaSourceInfo mediaSource = null,
+            bool stopExistingPlaybackReporting = true)
         {
             if (item?.Id == null)
             {
@@ -1217,7 +1437,10 @@ namespace GelBox.Services
 
 
             // Stop any existing playback reporting
-            await StopPlaybackReporting().ConfigureAwait(false);
+            if (stopExistingPlaybackReporting)
+            {
+                await StopPlaybackReporting().ConfigureAwait(false);
+            }
 
             // Reset fallback mode flag
             _isInFallbackMode = false;
@@ -1316,12 +1539,15 @@ namespace GelBox.Services
                     return;
                 }
 
-                // Replace queue with only this item
-                _queueService.ClearQueue();
-                _queueService.AddToQueue(item);
-                QueueChanged?.Invoke(this, _queueService.Queue);
+                await RunSerializedPlaybackTransitionAsync(async () =>
+                {
+                    // Replace queue with only this item
+                    _queueService.ClearQueue();
+                    _queueService.AddToQueue(item);
+                    QueueChanged?.Invoke(this, _queueService.Queue);
 
-                await PlayCurrentQueueItem(item, mediaSource).ConfigureAwait(false);
+                    await PlayCurrentQueueItem(item, mediaSource).ConfigureAwait(false);
+                }, "PlaySingleItem").ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -1337,8 +1563,10 @@ namespace GelBox.Services
                 Logger.LogInformation($"=== LoadMedia Started for: {item.Name} ===");
 
                 string mediaUrl = null;
+                var isAudio = item.Type == BaseItemDto_Type.Audio;
                 var serverUrl = _authService.ServerUrl;
                 var accessToken = _authService.AccessToken;
+                var shouldForceAudioTranscode = isAudio && ShouldForceTranscodingForAudio(mediaSource);
 
                 if (string.IsNullOrEmpty(serverUrl) || string.IsNullOrEmpty(accessToken))
                 {
@@ -1360,7 +1588,23 @@ namespace GelBox.Services
                 Logger.LogInformation($"  Protocol: {mediaSource.Protocol}");
 
                 // Determine the best URL to use based on media source capabilities
-                if (mediaSource.SupportsDirectStream == true && !string.IsNullOrEmpty(mediaSource.Path))
+                if (shouldForceAudioTranscode && isAudio && item.Id.HasValue && mediaSource.SupportsTranscoding == true)
+                {
+                    mediaUrl = BuildUniversalAudioUrl(item.Id.Value, mediaSource, forceMp3Transcode: true);
+
+                    if (!string.IsNullOrEmpty(mediaUrl))
+                    {
+                        if (!string.IsNullOrEmpty(accessToken))
+                        {
+                            mediaUrl = UrlHelper.AppendApiKey(mediaUrl, accessToken);
+                        }
+
+                        Logger.LogInformation(
+                            "Forcing universal transcoding for potentially incompatible audio format on Xbox");
+                        Logger.LogInformation($"Universal URL constructed: {mediaUrl}");
+                    }
+                }
+                else if (mediaSource.SupportsDirectStream == true && !string.IsNullOrEmpty(mediaSource.Path))
                 {
                     // Prefer direct streaming for audio files when supported
                     if (item.Type == BaseItemDto_Type.Audio && mediaSource.Protocol == MediaSourceInfo_Protocol.File)
@@ -1399,24 +1643,7 @@ namespace GelBox.Services
                 else if (item.Type == BaseItemDto_Type.Audio && item.Id.HasValue &&
                          mediaSource.SupportsTranscoding == true)
                 {
-                    // Fall back to universal endpoint for audio that needs transcoding using SDK
-                    var requestInfo = _apiClient.Audio[item.Id.Value].Universal.ToGetRequestInformation(config =>
-                    {
-                        // Add media source ID if available
-                        if (!string.IsNullOrEmpty(mediaSource.Id))
-                        {
-                            config.QueryParameters.MediaSourceId = mediaSource.Id;
-                        }
-
-                        // Let the server decide the best format - support direct play when possible
-                        // Xbox supports: MP3, AAC, FLAC, WMA, AC3
-                        // Don't force transcoding - let Jellyfin decide based on client capabilities
-                        config.QueryParameters.DeviceId = _deviceService.GetDeviceId();
-                        config.QueryParameters.UserId = _userProfileService.GetCurrentUserGuid();
-                    });
-
-                    // SDK handles authentication via headers
-                    mediaUrl = _apiClient.BuildUri(requestInfo).ToString();
+                    mediaUrl = BuildUniversalAudioUrl(item.Id.Value, mediaSource, forceMp3Transcode: false);
 
                     // Add API key for authentication since MediaSource.CreateFromUri doesn't use SDK headers
                     if (!string.IsNullOrEmpty(accessToken))
@@ -1457,7 +1684,6 @@ namespace GelBox.Services
                     Logger.LogInformation($"Container: {mediaSource.Container}");
 
                     MediaSource source = null;
-                    var isAudio = item.Type == BaseItemDto_Type.Audio;
 
                     if (isAudio)
                     {
@@ -1485,10 +1711,11 @@ namespace GelBox.Services
                         // If container indicates a direct file format and server might return direct file
                         else if (!string.IsNullOrEmpty(mediaSource.Container))
                         {
-                            var directStreamContainers = new[] { "mp3", "m4a", "aac", "flac", "alac", "wav", "wma", "amr", "ogg" };
+                            var directStreamContainers = new[] { "mp3", "m4a", "aac", "flac", "alac", "wav", "wma", "amr" };
                             if (directStreamContainers.Contains(mediaSource.Container.ToLower()) &&
                                 mediaSource.SupportsDirectStream == true &&
-                                !mediaUrl.Contains("transcodingProtocol=hls"))
+                                !mediaUrl.Contains("transcodingProtocol=hls") &&
+                                !shouldForceAudioTranscode)
                             {
                                 // Even with universal endpoint, server might return direct file for these formats
                                 useSimpleSource = true;
@@ -1597,6 +1824,47 @@ namespace GelBox.Services
             {
                 await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
             }
+        }
+
+        private bool ShouldForceTranscodingForAudio(MediaSourceInfo mediaSource)
+        {
+            var container = mediaSource?.Container;
+            if (!string.IsNullOrWhiteSpace(container) && ForceTranscodeAudioContainers.Contains(container))
+            {
+                return true;
+            }
+
+            var audioCodec = mediaSource?.MediaStreams?
+                .FirstOrDefault(s => s.Type == MediaStream_Type.Audio)?.Codec;
+            if (!string.IsNullOrWhiteSpace(audioCodec) && ForceTranscodeAudioCodecs.Contains(audioCodec))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private string BuildUniversalAudioUrl(Guid itemId, MediaSourceInfo mediaSource, bool forceMp3Transcode)
+        {
+            var requestInfo = _apiClient.Audio[itemId].Universal.ToGetRequestInformation(config =>
+            {
+                if (!string.IsNullOrEmpty(mediaSource?.Id))
+                {
+                    config.QueryParameters.MediaSourceId = mediaSource.Id;
+                }
+
+                config.QueryParameters.DeviceId = _deviceService.GetDeviceId();
+                config.QueryParameters.UserId = _userProfileService.GetCurrentUserGuid();
+
+                if (forceMp3Transcode)
+                {
+                    config.QueryParameters.Container = new[] { "mp3" };
+                    config.QueryParameters.AudioCodec = "mp3";
+                    config.QueryParameters.MaxStreamingBitrate = 320000;
+                }
+            });
+
+            return _apiClient.BuildUri(requestInfo).ToString();
         }
 
         private async Task LogMediaUrlHeadersAsync(string mediaUrl, string container)
