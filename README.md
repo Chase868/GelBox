@@ -36,6 +36,7 @@ A native Jellyfin client for Xbox One and Xbox Series X|S consoles, built with U
 - **Mini player** - Persistent playback controls
 - **Queue management** - Play next, add to queue, shuffle, repeat (no reordering/editing at the moment...)
 - **Instant Mix** - Create automatic playlists from any song
+- **6-band Equalizer** - Adjustable parametric EQ (60 Hz, 180 Hz, 500 Hz, 1.4 kHz, 4.0 kHz, 11 kHz) with optional video support
 
 ### 📚 Library Management
 - **Library browsing** - Browse Movies, TV Shows, Music, and more

@@ -32,6 +32,7 @@ namespace GelBox.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly IUserProfileService _userProfileService;
         private readonly IVolumeNormalizationService _volumeNormalizationService;
+            private readonly IEqualizerService _equalizerService;
         private readonly SemaphoreSlim _playbackTransitionSemaphore = new SemaphoreSlim(1, 1);
         private static readonly HashSet<string> ForceTranscodeAudioContainers =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "ogg", "opus", "oga", "webm" };
@@ -71,7 +72,8 @@ namespace GelBox.Services
             IMediaOptimizationService mediaOptimizationService,
             IPlaybackQueueService queueService,
             IMediaControlService mediaControlService,
-            IVolumeNormalizationService volumeNormalizationService) : base(logger)
+            IVolumeNormalizationService volumeNormalizationService,
+            IEqualizerService equalizerService = null) : base(logger)
         {
             _serviceProvider = serviceProvider;
             _apiClient = apiClient;
@@ -84,6 +86,7 @@ namespace GelBox.Services
             _queueService = queueService;
             _mediaControlService = mediaControlService;
             _volumeNormalizationService = volumeNormalizationService ?? throw new ArgumentNullException(nameof(volumeNormalizationService));
+            _equalizerService = equalizerService;
 
             // Don't subscribe to events in constructor - wait until audio playback starts
             // Initialize();
@@ -788,6 +791,11 @@ namespace GelBox.Services
 
                     // Initialize MediaControlService with the audio MediaPlayer
                     await _mediaControlService.InitializeAsync(audioMediaPlayer).ConfigureAwait(false);
+
+                        if (_equalizerService != null)
+                        {
+                            await _equalizerService.AttachToAudioPlayerAsync(audioMediaPlayer).ConfigureAwait(false);
+                        }
 
                     Logger.LogInformation("MediaPlayer created and MediaControlService initialized for audio playback");
                 }
@@ -1829,6 +1837,20 @@ namespace GelBox.Services
                     }
 
                     _mediaControlService.Play();
+                    // Tell the EQ service which URI is playing so it can build its AudioGraph.
+                    // This must be called after Play() so the MediaPlayer state is Playing when
+                    // OnAudioPlaybackStateChanged fires and starts the graph in sync.
+                    if (_equalizerService != null && isAudio && !string.IsNullOrEmpty(mediaUrl))
+                    {
+                        try
+                        {
+                            await _equalizerService.SetAudioSourceAsync(new Uri(mediaUrl)).ConfigureAwait(false);
+                        }
+                        catch (Exception eqEx)
+                        {
+                            Logger.LogWarning(eqEx, "EQ SetAudioSourceAsync failed, continuing without EQ");
+                        }
+                    }
 
                     Logger.LogInformation("Successfully set media source and started playback");
                 }

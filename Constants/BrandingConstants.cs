@@ -13,7 +13,7 @@ namespace GelBox.Constants
         /// <summary>
         ///     The current application version (keep in sync with Package.appxmanifest)
         /// </summary>
-        public const string APP_VERSION = "1.0.5";
+        public const string APP_VERSION = "1.0.6";
 
         /// <summary>
         ///     User agent for API calls

@@ -31,5 +31,10 @@ namespace GelBox.Views
         {
             NavigationService?.GoBack();
         }
+
+            private void ResetEqButton_Click(object sender, RoutedEventArgs e)
+            {
+                TypedViewModel?.PlaybackSettings?.ResetEqualizer();
+            }
     }
 }

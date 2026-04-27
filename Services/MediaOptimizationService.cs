@@ -28,6 +28,7 @@ namespace GelBox.Services
         private readonly INetworkMonitor _networkMonitor;
         private readonly IPreferencesService _preferencesService;
         private readonly IVolumeNormalizationService _volumeNormalizationService;
+            private readonly IEqualizerService _equalizerService;
         private readonly ConcurrentDictionary<string, Task<MediaSource>> _preloadTasks = new();
         private readonly Task _initializationTask;
         private int _currentBandwidthKbps = 0;
@@ -47,7 +48,8 @@ namespace GelBox.Services
             IUnifiedDeviceService deviceService,
             IMemoryMonitor memoryMonitor,
             INetworkMonitor networkMonitor,
-            IVolumeNormalizationService volumeNormalizationService) : base(logger)
+            IVolumeNormalizationService volumeNormalizationService,
+            IEqualizerService equalizerService = null) : base(logger)
         {
             _httpClientFactory = httpClientFactory;
             _preferencesService = preferencesService;
@@ -55,6 +57,7 @@ namespace GelBox.Services
             _memoryMonitor = memoryMonitor;
             _networkMonitor = networkMonitor;
             _volumeNormalizationService = volumeNormalizationService ?? throw new ArgumentNullException(nameof(volumeNormalizationService));
+            _equalizerService = equalizerService;
 
             // Start initialization but don't await - will be awaited when needed
             _initializationTask = InitializeAsync();
@@ -356,6 +359,11 @@ namespace GelBox.Services
                 }
 
                 Logger.LogInformation($"Audio enhancements applied - Night: {_nightModeEnabled}, Item: {item?.Name ?? "None"}");
+                                // Attach video EQ (bypassed automatically when ApplyEqToVideo is disabled)
+                                if (_equalizerService != null)
+                                {
+                                    await _equalizerService.AttachToVideoPlayerAsync(player).ConfigureAwait(false);
+                                }
                 await Task.CompletedTask.ConfigureAwait(false);
             }
             catch (Exception ex)

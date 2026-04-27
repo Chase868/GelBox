@@ -26,6 +26,7 @@ namespace GelBox.Controls
         private IUserProfileService _userProfileService;
         private IImageLoadingService _imageLoadingService;
         private IVolumeNormalizationService _volumeNormalizationService;
+        private IEqualizerService _equalizerService;
         private DispatcherTimer _progressTimer;
         private bool _isQueueOpen = false;
         private bool _isHistoryExpanded = false;
@@ -45,6 +46,7 @@ namespace GelBox.Controls
             _userProfileService = GetService<IUserProfileService>();
             _imageLoadingService = GetService<IImageLoadingService>();
             _volumeNormalizationService = GetService<IVolumeNormalizationService>();
+            _equalizerService = GetService<IEqualizerService>();
         }
 
         private void MusicPlayer_Loaded(object sender, RoutedEventArgs e)
@@ -787,72 +789,101 @@ namespace GelBox.Controls
                 var content = new ScrollViewer
                 {
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    MaxHeight = 500
+                    MaxHeight = 600
                 };
 
-                var stack = new StackPanel { Spacing = 4, MinWidth = 380 };
-                content.Content = stack;
+                var outerPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 };
+                var leftStack = new StackPanel { Spacing = 4, Width = 240 };
+                var rightStack = new StackPanel { Spacing = 4, Width = 300 };
+                outerPanel.Children.Add(leftStack);
+                outerPanel.Children.Add(rightStack);
+                content.Content = outerPanel;
 
-                // Source
-                AddSectionHeader(stack, "Source Audio");
-                AddRow(stack, "Container", container);
+                // --- Left column: Source Audio + Playback Method ---
+                AddSectionHeader(leftStack, "Source Audio");
+                AddRow(leftStack, "Container", container);
                 if (audioCodec != container)
-                    AddRow(stack, "Codec", audioCodec);
-                AddRow(stack, "Bitrate", sourceBitrate);
-                AddRow(stack, "Sample Rate", sampleRate);
+                    AddRow(leftStack, "Codec", audioCodec);
+                AddRow(leftStack, "Bitrate", sourceBitrate);
+                AddRow(leftStack, "Sample Rate", sampleRate);
                 if (bitDepth != null)
-                    AddRow(stack, "Bit Depth", bitDepth);
+                    AddRow(leftStack, "Bit Depth", bitDepth);
                 if (channels != null)
-                    AddRow(stack, "Channels", channels);
+                    AddRow(leftStack, "Channels", channels);
 
-                // Playback method
-                AddSectionHeader(stack, "Playback Method");
+                AddSectionHeader(leftStack, "Playback Method");
                 if (isTranscoded)
                 {
                     string transLabel = "Transcoded";
                     if (!string.IsNullOrEmpty(transcodedContainer))
                         transLabel += $" \u2192 {transcodedContainer}";
+                    AddRow(leftStack, "Method", transLabel);
                     if (transcodedMaxKbps.HasValue)
-                        transLabel += $", {transcodedMaxKbps.Value} kbps max";
-                    AddRow(stack, "Method", transLabel);
+                        AddRow(leftStack, "Max bitrate", $"{transcodedMaxKbps.Value:N0} kbps");
                 }
                 else
                 {
-                    AddRow(stack, "Method", "Direct Stream");
+                    AddRow(leftStack, "Method", "Direct Stream");
                 }
 
-                // Normalization
-                AddSectionHeader(stack, "Volume Normalization");
+                // --- Right column: Volume Normalization + Equalizer ---
+                AddSectionHeader(rightStack, "Volume Normalization");
                 if (normDetails == null)
                 {
-                    AddRow(stack, "Status", "Unavailable");
+                    AddRow(rightStack, "Status", "Unavailable");
                 }
                 else
                 {
-                    AddRow(stack, "Status", normDetails.IsEnabled ? "Enabled" : "Disabled");
+                    AddRow(rightStack, "Status", normDetails.IsEnabled ? "Enabled" : "Disabled");
 
                     if (normDetails.IsEnabled)
                     {
-                        AddRow(stack, "Source", normDetails.UseAlbumGain ? "Album Gain" : "Track Gain");
+                        AddRow(rightStack, "Source", normDetails.UseAlbumGain ? "Album Gain" : "Track Gain");
 
                         double? displayGainDb = normDetails.UseAlbumGain
                             ? normDetails.AlbumGainDb
                             : normDetails.TrackGainDb;
 
-                        AddRow(stack, "Stored Gain",
+                        AddRow(rightStack, "Stored Gain",
                             displayGainDb.HasValue
                                 ? $"{displayGainDb.Value:+0.00;-0.00} dB"
                                 : "Not available");
 
-                        AddRow(stack, "Volume Offset",
+                        AddRow(rightStack, "Volume Offset",
                             normDetails.VolumeOffsetDb == 0.0
                                 ? "0 dB (none)"
                                 : $"{normDetails.VolumeOffsetDb:+0.0;-0.0} dB");
 
                         if (normDetails.AppliedGainDb.HasValue)
-                            AddRow(stack, "Applied Adjustment", $"{normDetails.AppliedGainDb.Value:+0.0;-0.0} dB");
+                            AddRow(rightStack, "Applied Adj.", $"{normDetails.AppliedGainDb.Value:+0.0;-0.0} dB");
                         else
-                            AddRow(stack, "Applied Adjustment", "None (no data)");
+                            AddRow(rightStack, "Applied Adj.", "None (no data)");
+                    }
+                }
+
+                AddSectionHeader(rightStack, "Equalizer");
+                if (_equalizerService == null)
+                {
+                    AddRow(rightStack, "Status", "Unavailable");
+                }
+                else
+                {
+                    bool eqEnabled = _equalizerService.IsEnabled;
+                    string eqStatus = eqEnabled ? "Enabled" : "Disabled";
+                    if (eqEnabled && _equalizerService.IsEqForVideoEnabled)
+                        eqStatus += ", Video";
+                    AddRow(rightStack, "Status", eqStatus);
+
+                    if (eqEnabled)
+                    {
+                        static string G(double v) => $"{v:+0.0;-0.0;0.0} dB";
+                        double[] gains = new double[6];
+                        for (int i = 0; i < 6; i++) gains[i] = _equalizerService.GetBandGain(i);
+
+                        AddRow(rightStack, "Low bands",
+                            $"60Hz {G(gains[0])}\n180Hz {G(gains[1])}\n500Hz {G(gains[2])}");
+                        AddRow(rightStack, "High bands",
+                            $"1.4kHz {G(gains[3])}\n4kHz {G(gains[4])}\n11kHz {G(gains[5])}");
                     }
                 }
 
@@ -897,20 +928,29 @@ namespace GelBox.Controls
 
         private static void AddRow(StackPanel parent, string label, string value)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(new TextBlock
+            var row = new Grid();
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var labelBlock = new TextBlock
             {
                 Text = label + ":",
-                Width = 160,
                 FontSize = 13,
                 Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF))
-            });
-            row.Children.Add(new TextBlock
+            };
+
+            var valueBlock = new TextBlock
             {
                 Text = value ?? "—",
                 FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
                 Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White)
-            });
+            };
+
+            Grid.SetColumn(labelBlock, 0);
+            Grid.SetColumn(valueBlock, 1);
+            row.Children.Add(labelBlock);
+            row.Children.Add(valueBlock);
             parent.Children.Add(row);
         }
 

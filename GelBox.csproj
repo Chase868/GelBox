@@ -204,6 +204,7 @@
     <Compile Include="Services\MediaControlService.cs" />
     <Compile Include="Services\DialogService.cs" />
     <Compile Include="Services\ErrorHandlingService.cs" />
+    <Compile Include="Services\EqualizerService.cs" />
     <Compile Include="Services\ControllerInputService.cs" />
     <Compile Include="Services\PlaybackControlService.cs" />
     <Compile Include="Services\PlaybackResumeCoordinator.cs" />

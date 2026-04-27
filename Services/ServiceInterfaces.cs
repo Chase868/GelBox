@@ -518,6 +518,53 @@ namespace GelBox.Services
         void ClearCache();
     }
 
+        /// <summary>
+        /// Service for applying a 6-band parametric equalizer to audio and video playback
+        /// using Windows.Media.Audio.AudioGraph DSP pipeline.
+        /// </summary>
+        public interface IEqualizerService
+        {
+            /// <summary>Attaches the EQ AudioGraph to the music player MediaPlayer.</summary>
+            Task AttachToAudioPlayerAsync(MediaPlayer player);
+
+            /// <summary>Detaches and disposes the audio player AudioGraph.</summary>
+            Task DetachAudioAsync();
+
+            /// <summary>
+            /// Attaches the EQ AudioGraph to the video player MediaPlayer.
+            /// Does nothing if ApplyEqToVideo is disabled.
+            /// </summary>
+            Task AttachToVideoPlayerAsync(MediaPlayer player);
+
+            /// <summary>Detaches and disposes the video player AudioGraph.</summary>
+            Task DetachVideoAsync();
+
+            /// <summary>Enables or bypasses all EQ effects across attached players.</summary>
+            void SetEnabled(bool enabled);
+
+            /// <summary>Controls whether EQ is applied to video playback.</summary>
+            void SetEqForVideoEnabled(bool enabled);
+
+            /// <summary>Sets the gain for a specific band index (0-5).</summary>
+            void SetBandGain(int bandIndex, double gainDb);
+
+            /// <summary>Gets the current gain for a specific band index (0-5).</summary>
+            double GetBandGain(int bandIndex);
+
+            bool IsEnabled { get; }
+            bool IsEqForVideoEnabled { get; }
+
+            /// <summary>Loads EQ state from persisted preferences.</summary>
+            Task LoadPreferencesAsync();
+
+            /// <summary>
+            /// Tells the EQ service which URI the music player is about to play.
+            /// When EQ is enabled this creates a new AudioGraph from that URI (separate from the
+            /// MediaPlayer pipeline) and mutes the MediaPlayer so only the EQ-processed audio is heard.
+            /// Safe to call even when EQ is disabled – the URI is stored for when it is later enabled.
+            /// </summary>
+            Task SetAudioSourceAsync(Uri streamUri);
+        }
     // Supporting classes
     public class QuickConnectResult
     {

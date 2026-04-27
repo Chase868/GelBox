@@ -582,6 +582,7 @@ namespace GelBox
             });
 
             services.AddSingleton<IVolumeNormalizationService, VolumeNormalizationService>();
+            services.AddSingleton<IEqualizerService, EqualizerService>();
 
             services.AddSingleton<IMediaOptimizationService>(provider =>
             {
@@ -593,7 +594,8 @@ namespace GelBox
                 var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
                 var volumeNormalizationService = provider.GetRequiredService<IVolumeNormalizationService>();
                 return new MediaOptimizationService(logger, httpClientFactory, preferencesService, deviceService, memoryMonitor,
-                    networkMonitor, volumeNormalizationService);
+                    networkMonitor, volumeNormalizationService,
+                    provider.GetService<IEqualizerService>());
             });
 
             services.AddSingleton<IDeviceProfileService, DeviceProfileService>();
@@ -645,7 +647,8 @@ namespace GelBox
                 var apiClient = provider.GetRequiredService<JellyfinApiClient>();
                 var volumeNormalizationService = provider.GetRequiredService<IVolumeNormalizationService>();
                 return new MusicPlayerService(logger, provider, apiClient, authService, userProfileService, mediaPlaybackService,
-                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService, volumeNormalizationService);
+                    deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService, volumeNormalizationService,
+                    provider.GetService<IEqualizerService>());
             });
 
             try
@@ -1531,6 +1534,76 @@ namespace GelBox
             return false;
         }
 
+        private async Task<bool> TryRestorePlaybackPausedAsync(IMusicPlayerService musicPlayerService, int currentIndex,
+            string savedPosition)
+        {
+            if (_playbackResumeTriggeredThisLaunch || _playbackResumeCompletedThisLaunch)
+            {
+                return false;
+            }
+
+            if (musicPlayerService == null || currentIndex < 0 || (musicPlayerService.Queue?.Count ?? 0) <= currentIndex)
+            {
+                return false;
+            }
+
+            _playbackResumeTriggeredThisLaunch = true;
+
+            for (var attempt = 1; attempt <= 10; attempt++)
+            {
+                var authService = GetService<IAuthenticationService>();
+                var hasAuth = !string.IsNullOrWhiteSpace(authService?.AccessToken) &&
+                              !string.IsNullOrWhiteSpace(authService?.ServerUrl);
+
+                if (hasAuth)
+                {
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        musicPlayerService.PlayQueueItemAt(currentIndex);
+                    }, logger: _logger);
+
+                    if (TimeSpan.TryParse(savedPosition, out var parsedPosition) &&
+                        parsedPosition > TimeSpan.Zero)
+                    {
+                        await Task.Delay(1200).ConfigureAwait(false);
+                        await UIHelper.RunOnUIThreadAsync(() =>
+                        {
+                            try
+                            {
+                                var session = musicPlayerService.MediaPlayer?.PlaybackSession;
+                                if (session != null)
+                                {
+                                    session.Position = parsedPosition;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogWarning(ex, "Failed applying restored playback position (paused restore)");
+                            }
+                        }, logger: _logger);
+                    }
+
+                    await Task.Delay(150).ConfigureAwait(false);
+                    await UIHelper.RunOnUIThreadAsync(() =>
+                    {
+                        musicPlayerService.Pause();
+                    }, logger: _logger);
+
+                    _logger?.LogWarning($"Playback restore prepared in paused state at queue index {currentIndex}");
+                    Debug.WriteLine($"[QueueState] Playback restore paused at index {currentIndex}");
+                    _playbackResumeCompletedThisLaunch = true;
+                    return true;
+                }
+
+                Debug.WriteLine($"[QueueState] Paused restore waiting for auth (attempt {attempt})");
+                await Task.Delay(1000).ConfigureAwait(false);
+            }
+
+            _logger?.LogWarning("Paused playback restore skipped because auth was not ready after retries");
+            Debug.WriteLine("[QueueState] Paused restore skipped: auth not ready");
+            return false;
+        }
+
         private async Task RestoreMusicQueueStateAsync()
         {
             try
@@ -1688,8 +1761,10 @@ namespace GelBox
                     Debug.WriteLine($"[QueueState] Restore detected existing in-memory queue. count={musicPlayerService.Queue.Count}, index={currentIndex}");
                 }
 
-                var shouldResumePlayback = queueState.WasPlaying || appState?.PlaybackState?.IsPlaying == true;
-                if (!shouldResumePlayback && !_playbackResumeTriggeredThisLaunch && !queueAlreadyPresent &&
+                var autoPlayAfterRestore = appPrefs?.AutoPlayAfterRestoreOnLaunch ?? false;
+                var shouldResumePlayback = autoPlayAfterRestore &&
+                                           (queueState.WasPlaying || appState?.PlaybackState?.IsPlaying == true);
+                if (autoPlayAfterRestore && !shouldResumePlayback && !_playbackResumeTriggeredThisLaunch && !queueAlreadyPresent &&
                     currentIndex >= 0 && (musicPlayerService.Queue?.Count ?? 0) > currentIndex)
                 {
                     // Fallback: if we restored a concrete queue/index, resume that item to preserve playback continuity.
@@ -1701,12 +1776,20 @@ namespace GelBox
                     : appState?.PlaybackState?.Position;
 
                 _logger?.LogWarning(
-                    $"Queue restore resume decision: shouldResume={shouldResumePlayback}, queueWasPlaying={queueState.WasPlaying}, appStateWasPlaying={appState?.PlaybackState?.IsPlaying == true}");
+                    $"Queue restore resume decision: shouldResume={shouldResumePlayback}, autoPlayAfterRestore={autoPlayAfterRestore}, queueWasPlaying={queueState.WasPlaying}, appStateWasPlaying={appState?.PlaybackState?.IsPlaying == true}");
 
                 if (!_playbackResumeTriggeredThisLaunch)
                 {
-                    await TryResumePlaybackAsync(musicPlayerService, currentIndex, shouldResumePlayback, savedPosition)
-                        .ConfigureAwait(false);
+                    if (autoPlayAfterRestore)
+                    {
+                        await TryResumePlaybackAsync(musicPlayerService, currentIndex, shouldResumePlayback, savedPosition)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await TryRestorePlaybackPausedAsync(musicPlayerService, currentIndex, savedPosition)
+                            .ConfigureAwait(false);
+                    }
                 }
             }
             catch (Exception ex)

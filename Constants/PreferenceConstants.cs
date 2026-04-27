@@ -26,6 +26,7 @@ namespace GelBox.Constants
         public const string AllowAudioStreamCopy = "AllowAudioStreamCopy";
         public const string PauseOnFocusLoss = "PauseOnFocusLoss";
         public const string RestorePlaybackOnLaunch = "RestorePlaybackOnLaunch";
+        public const string AutoPlayAfterRestoreOnLaunch = "AutoPlayAfterRestoreOnLaunch";
 
         // MediaEnhancementService specific keys
         public const string EnableMediaEnhancements = "EnableMediaEnhancements";
