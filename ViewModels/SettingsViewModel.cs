@@ -31,6 +31,8 @@ namespace GelBox.ViewModels
             INavigationService navigationService,
             IDialogService dialogService,
             MainViewModel mainViewModel,
+            IVolumeNormalizationService volumeNormalizationService,
+            IMusicPlayerService musicPlayerService,
             ILogger<SettingsViewModel> logger,
             ILogger<ServerSettingsViewModel> serverLogger,
             ILogger<PlaybackSettingsViewModel> playbackLogger) : base(logger)
@@ -48,7 +50,9 @@ namespace GelBox.ViewModels
             PlaybackSettings = new PlaybackSettingsViewModel(
                 playbackLogger,
                 preferencesService,
-                mediaOptimizationService); ResetSettingsCommand = new RelayCommand(ResetSettings);
+                mediaOptimizationService,
+                volumeNormalizationService,
+                musicPlayerService); ResetSettingsCommand = new RelayCommand(ResetSettings);
 
             // Call InitializeAsync without await from constructor for async initialization
             FireAndForget(() => InitializeAsync());

@@ -40,6 +40,9 @@ namespace GelBox.Services
         private MediaSourceInfo _currentMediaSource;
         private string _currentPlaySessionId;
         private bool _isInFallbackMode = false;
+        private bool _isCurrentlyTranscoded = false;
+        private string _transcodedContainer = null;
+        private int? _transcodedMaxBitrateKbps = null;
         private SystemMediaTransportControls _systemMediaTransportControls;
         private DateTime _smtcSuppressStoppedUntilUtc = DateTime.MinValue;
         private Guid? _lastRecoveredFailureItemId;
@@ -98,6 +101,10 @@ namespace GelBox.Services
         public bool IsShuffleEnabled => _queueService.IsShuffleMode;
         public RepeatMode RepeatMode => _mediaControlService.RepeatMode;
         public List<BaseItemDto> PlayedHistory => _playedHistory;
+        public MediaSourceInfo CurrentMediaSourceInfo => _currentMediaSource;
+        public bool IsCurrentlyTranscoded => _isCurrentlyTranscoded;
+        public string TranscodedContainer => _transcodedContainer;
+        public int? TranscodedMaxBitrateKbps => _transcodedMaxBitrateKbps;
 
         public List<(BaseItemDto Item, int QueueIndex)> GetUpcomingQueue()
         {
@@ -1587,9 +1594,17 @@ namespace GelBox.Services
                 Logger.LogInformation($"  IsRemote: {mediaSource.IsRemote}");
                 Logger.LogInformation($"  Protocol: {mediaSource.Protocol}");
 
+                // Reset transcoding state for this item
+                _isCurrentlyTranscoded = false;
+                _transcodedContainer = null;
+                _transcodedMaxBitrateKbps = null;
+
                 // Determine the best URL to use based on media source capabilities
                 if (shouldForceAudioTranscode && isAudio && item.Id.HasValue && mediaSource.SupportsTranscoding == true)
                 {
+                    _isCurrentlyTranscoded = true;
+                    _transcodedContainer = "mp3";
+                    _transcodedMaxBitrateKbps = 320;
                     mediaUrl = BuildUniversalAudioUrl(item.Id.Value, mediaSource, forceMp3Transcode: true);
 
                     if (!string.IsNullOrEmpty(mediaUrl))
@@ -1629,6 +1644,7 @@ namespace GelBox.Services
                 else if (!string.IsNullOrEmpty(mediaSource.TranscodingUrl))
                 {
                     // Use the server-provided transcoding URL
+                    _isCurrentlyTranscoded = true;
                     if (mediaSource.TranscodingUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                     {
                         mediaUrl = mediaSource.TranscodingUrl;
@@ -1651,6 +1667,7 @@ namespace GelBox.Services
                         mediaUrl = UrlHelper.AppendApiKey(mediaUrl, accessToken);
                     }
 
+                    _isCurrentlyTranscoded = true;
                     Logger.LogInformation("Using universal HLS endpoint for audio transcoding");
                     Logger.LogInformation($"HLS URL constructed: {mediaUrl}");
                 }

@@ -419,6 +419,18 @@ namespace GelBox.Services
         Task<bool> EnableBackgroundPlayback();
         Task<bool> DisableBackgroundPlayback();
 
+        /// <summary>The MediaSourceInfo resolved for the currently playing item, or null.</summary>
+        MediaSourceInfo CurrentMediaSourceInfo { get; }
+
+        /// <summary>True if the current item is being transcoded by the server (not direct-streamed).</summary>
+        bool IsCurrentlyTranscoded { get; }
+
+        /// <summary>Container format of the transcoded stream (e.g. "mp3"), or null when not transcoded.</summary>
+        string TranscodedContainer { get; }
+
+        /// <summary>Maximum bitrate (kbps) requested for transcoding, or null when not transcoded.</summary>
+        int? TranscodedMaxBitrateKbps { get; }
+
         event EventHandler<BaseItemDto> NowPlayingChanged;
         event EventHandler<MediaPlaybackState> PlaybackStateChanged;
         event EventHandler<List<BaseItemDto>> QueueChanged;
@@ -494,6 +506,11 @@ namespace GelBox.Services
         /// Gets the current volume multiplier for an item without applying it
         /// </summary>
         Task<double?> GetVolumeMultiplierAsync(BaseItemDto item, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Gets full normalization details (raw dB gains, LUFS value, computed volume multiplier) for display.
+        /// </summary>
+        Task<NormalizationDetails> GetNormalizationDetailsAsync(BaseItemDto item, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Clears the LUFS cache

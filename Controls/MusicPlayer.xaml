@@ -386,6 +386,14 @@
                             </MenuFlyoutItem.Icon>
                         </MenuFlyoutItem>
                         <MenuFlyoutSeparator />
+                        <MenuFlyoutItem x:Name="PlaybackInfoItem"
+                                        Text="Playback Information"
+                                        Click="PlaybackInfo_Click">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE946;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem x:Name="ClosePlayerItem"
                                         Text="Close Player"
                                         Click="ClosePlayer_Click">

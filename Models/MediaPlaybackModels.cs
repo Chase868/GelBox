@@ -144,4 +144,23 @@ namespace GelBox.Models
         NavigateBack
     }
 
+    /// <summary>
+    /// Holds raw normalization metadata for the current audio item.
+    /// </summary>
+    public class NormalizationDetails
+    {
+        public bool IsEnabled { get; set; }
+        public bool UseAlbumGain { get; set; }
+        public double VolumeOffsetDb { get; set; }
+        public double? TrackGainDb { get; set; }
+        public double? AlbumGainDb { get; set; }
+        public double? VolumeMultiplier { get; set; }
+
+        /// <summary>Net gain in dB actually applied to the volume (positive = louder, negative = quieter).</summary>
+        public double? AppliedGainDb =>
+            VolumeMultiplier.HasValue && VolumeMultiplier.Value > 0
+                ? 20.0 * Math.Log10(VolumeMultiplier.Value)
+                : (double?)null;
+    }
+
 }

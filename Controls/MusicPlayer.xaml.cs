@@ -25,6 +25,7 @@ namespace GelBox.Controls
         private JellyfinApiClient _apiClient;
         private IUserProfileService _userProfileService;
         private IImageLoadingService _imageLoadingService;
+        private IVolumeNormalizationService _volumeNormalizationService;
         private DispatcherTimer _progressTimer;
         private bool _isQueueOpen = false;
         private bool _isHistoryExpanded = false;
@@ -43,6 +44,7 @@ namespace GelBox.Controls
             _apiClient = GetService<JellyfinApiClient>();
             _userProfileService = GetService<IUserProfileService>();
             _imageLoadingService = GetService<IImageLoadingService>();
+            _volumeNormalizationService = GetService<IVolumeNormalizationService>();
         }
 
         private void MusicPlayer_Loaded(object sender, RoutedEventArgs e)
@@ -737,6 +739,179 @@ namespace GelBox.Controls
             {
                 Logger?.LogError(ex, "Error in ClearQueue_Click");
             }
+        }
+
+        private async void PlaybackInfo_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var item = _musicPlayerService?.CurrentItem;
+                var mediaSource = _musicPlayerService?.CurrentMediaSourceInfo;
+
+                // --- Source audio stream details ---
+                var audioStream = mediaSource?.MediaStreams?.FirstOrDefault(
+                    s => s.Type == MediaStream_Type.Audio);
+
+                string container = mediaSource?.Container?.ToUpperInvariant() ?? "Unknown";
+                string audioCodec = audioStream?.Codec?.ToUpperInvariant() ?? mediaSource?.Container?.ToUpperInvariant() ?? "Unknown";
+
+                string sourceBitrate = mediaSource?.Bitrate.HasValue == true
+                    ? $"{mediaSource.Bitrate.Value / 1000:N0} kbps"
+                    : (audioStream?.BitRate.HasValue == true ? $"{audioStream.BitRate.Value / 1000:N0} kbps" : "Unknown");
+
+                string sampleRate = audioStream?.SampleRate.HasValue == true
+                    ? $"{audioStream.SampleRate.Value:N0} Hz"
+                    : "Unknown";
+
+                string bitDepth = audioStream?.BitDepth.HasValue == true
+                    ? $"{audioStream.BitDepth.Value}-bit"
+                    : null;
+
+                string channels = audioStream?.Channels.HasValue == true
+                    ? FormatChannels(audioStream.Channels.Value)
+                    : null;
+
+                // --- Transcoding ---
+                bool isTranscoded = _musicPlayerService?.IsCurrentlyTranscoded == true;
+                string transcodedContainer = _musicPlayerService?.TranscodedContainer?.ToUpperInvariant();
+                int? transcodedMaxKbps = _musicPlayerService?.TranscodedMaxBitrateKbps;
+
+                // --- Normalization ---
+                NormalizationDetails normDetails = null;
+                if (_volumeNormalizationService != null && item != null)
+                {
+                    normDetails = await _volumeNormalizationService.GetNormalizationDetailsAsync(item);
+                }
+
+                // --- Build dialog content ---
+                var content = new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    MaxHeight = 500
+                };
+
+                var stack = new StackPanel { Spacing = 4, MinWidth = 380 };
+                content.Content = stack;
+
+                // Source
+                AddSectionHeader(stack, "Source Audio");
+                AddRow(stack, "Container", container);
+                if (audioCodec != container)
+                    AddRow(stack, "Codec", audioCodec);
+                AddRow(stack, "Bitrate", sourceBitrate);
+                AddRow(stack, "Sample Rate", sampleRate);
+                if (bitDepth != null)
+                    AddRow(stack, "Bit Depth", bitDepth);
+                if (channels != null)
+                    AddRow(stack, "Channels", channels);
+
+                // Playback method
+                AddSectionHeader(stack, "Playback Method");
+                if (isTranscoded)
+                {
+                    string transLabel = "Transcoded";
+                    if (!string.IsNullOrEmpty(transcodedContainer))
+                        transLabel += $" \u2192 {transcodedContainer}";
+                    if (transcodedMaxKbps.HasValue)
+                        transLabel += $", {transcodedMaxKbps.Value} kbps max";
+                    AddRow(stack, "Method", transLabel);
+                }
+                else
+                {
+                    AddRow(stack, "Method", "Direct Stream");
+                }
+
+                // Normalization
+                AddSectionHeader(stack, "Volume Normalization");
+                if (normDetails == null)
+                {
+                    AddRow(stack, "Status", "Unavailable");
+                }
+                else
+                {
+                    AddRow(stack, "Status", normDetails.IsEnabled ? "Enabled" : "Disabled");
+
+                    if (normDetails.IsEnabled)
+                    {
+                        AddRow(stack, "Source", normDetails.UseAlbumGain ? "Album Gain" : "Track Gain");
+
+                        double? displayGainDb = normDetails.UseAlbumGain
+                            ? normDetails.AlbumGainDb
+                            : normDetails.TrackGainDb;
+
+                        AddRow(stack, "Stored Gain",
+                            displayGainDb.HasValue
+                                ? $"{displayGainDb.Value:+0.00;-0.00} dB"
+                                : "Not available");
+
+                        AddRow(stack, "Volume Offset",
+                            normDetails.VolumeOffsetDb == 0.0
+                                ? "0 dB (none)"
+                                : $"{normDetails.VolumeOffsetDb:+0.0;-0.0} dB");
+
+                        if (normDetails.AppliedGainDb.HasValue)
+                            AddRow(stack, "Applied Adjustment", $"{normDetails.AppliedGainDb.Value:+0.0;-0.0} dB");
+                        else
+                            AddRow(stack, "Applied Adjustment", "None (no data)");
+                    }
+                }
+
+                var dialog = new ContentDialog
+                {
+                    Title = "Playback Information",
+                    Content = content,
+                    CloseButtonText = "Close"
+                };
+
+                await dialog.ShowAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in PlaybackInfo_Click");
+            }
+        }
+
+        private static string FormatChannels(int count)
+        {
+            return count switch
+            {
+                1 => "1 (Mono)",
+                2 => "2 (Stereo)",
+                6 => "6 (5.1)",
+                8 => "8 (7.1)",
+                _ => count.ToString()
+            };
+        }
+
+        private static void AddSectionHeader(StackPanel parent, string title)
+        {
+            parent.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontSize = 14,
+                FontWeight = Windows.UI.Text.FontWeights.SemiBold,
+                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                Margin = new Windows.UI.Xaml.Thickness(0, 12, 0, 4)
+            });
+        }
+
+        private static void AddRow(StackPanel parent, string label, string value)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new TextBlock
+            {
+                Text = label + ":",
+                Width = 160,
+                FontSize = 13,
+                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF))
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = value ?? "—",
+                FontSize = 13,
+                Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White)
+            });
+            parent.Children.Add(row);
         }
 
         private void ClosePlayer_Click(object sender, RoutedEventArgs e)

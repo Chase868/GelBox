@@ -26,6 +26,8 @@ namespace GelBox.ViewModels
         #endregion
 
         private readonly IMediaOptimizationService _mediaOptimizationService;
+        private readonly IVolumeNormalizationService _volumeNormalizationService;
+        private readonly IMusicPlayerService _musicPlayerService;
         protected readonly IPreferencesService PreferencesService;
 
         // Settings state
@@ -47,7 +49,7 @@ namespace GelBox.ViewModels
         private bool _isNightModeEnabled = false;
         private bool _enableVolumeNormalization = true;
         private bool _useAlbumGain = false;
-        private double _lufsTarget = -16.0;
+        private double _volumeOffsetDb = 0.0;
         // Appearance settings
         private bool _enableGradientBackground = true;
         // Home screen settings
@@ -58,12 +60,15 @@ namespace GelBox.ViewModels
         public PlaybackSettingsViewModel(
             ILogger<PlaybackSettingsViewModel> logger,
             IPreferencesService preferencesService,
-            IMediaOptimizationService mediaOptimizationService) : base(logger)
+            IMediaOptimizationService mediaOptimizationService,
+            IVolumeNormalizationService volumeNormalizationService = null,
+            IMusicPlayerService musicPlayerService = null) : base(logger)
         {
             PreferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
             _mediaOptimizationService = mediaOptimizationService ??
                                         throw new ArgumentNullException(nameof(mediaOptimizationService));
-
+            _volumeNormalizationService = volumeNormalizationService;
+            _musicPlayerService = musicPlayerService;
         }
 
         #region Properties
@@ -223,7 +228,7 @@ namespace GelBox.ViewModels
                 _isNightModeEnabled = _mediaOptimizationService.GetNightModePreference();
                 _enableVolumeNormalization = appPrefs.EnableVolumeNormalization;
                 _useAlbumGain = appPrefs.UseAlbumGain;
-                _lufsTarget = appPrefs.LufsTarget;
+                _volumeOffsetDb = appPrefs.VolumeOffsetDb;
 
                 // Appearance settings
                 _enableGradientBackground = appPrefs.EnableGradientBackground;
@@ -245,7 +250,7 @@ namespace GelBox.ViewModels
                 OnPropertyChanged(nameof(IsNightModeEnabled));
                 OnPropertyChanged(nameof(EnableVolumeNormalization));
                 OnPropertyChanged(nameof(UseAlbumGain));
-                OnPropertyChanged(nameof(LufsTarget));
+                OnPropertyChanged(nameof(VolumeOffsetDb));
                 OnPropertyChanged(nameof(EnableGradientBackground));
                 OnPropertyChanged(nameof(ShowMoviesOnHome));
                 OnPropertyChanged(nameof(ShowTVShowsOnHome));
@@ -280,7 +285,7 @@ namespace GelBox.ViewModels
             IsNightModeEnabled = false;
             EnableVolumeNormalization = true;
             UseAlbumGain = false;
-            LufsTarget = -16.0;
+            VolumeOffsetDb = 0.0;
             EnableGradientBackground = true;
             ShowMoviesOnHome = true;
             ShowTVShowsOnHome = true;
@@ -489,9 +494,12 @@ namespace GelBox.ViewModels
             {
                 if (SetSettingProperty(ref _enableVolumeNormalization, value))
                 {
-                    FireAndForget(
-                        () => UpdateAppPreferenceAsync(prefs => prefs.EnableVolumeNormalization = value,
-                            nameof(EnableVolumeNormalization)));
+                    FireAndForget(async () =>
+                    {
+                        await UpdateAppPreferenceAsync(prefs => prefs.EnableVolumeNormalization = value,
+                            nameof(EnableVolumeNormalization));
+                        await ReapplyNormalizationAsync();
+                    });
                 }
             }
         }
@@ -503,25 +511,58 @@ namespace GelBox.ViewModels
             {
                 if (SetSettingProperty(ref _useAlbumGain, value))
                 {
-                    FireAndForget(
-                        () => UpdateAppPreferenceAsync(prefs => prefs.UseAlbumGain = value,
-                            nameof(UseAlbumGain)));
+                    FireAndForget(async () =>
+                    {
+                        await UpdateAppPreferenceAsync(prefs => prefs.UseAlbumGain = value,
+                            nameof(UseAlbumGain));
+                        await ReapplyNormalizationAsync();
+                    });
                 }
             }
         }
 
-        public double LufsTarget
+        public double VolumeOffsetDb
         {
-            get => _lufsTarget;
+            get => _volumeOffsetDb;
             set
             {
-                if (SetSettingProperty(ref _lufsTarget, Math.Clamp(value, -30.0, -10.0)))
+                if (SetSettingProperty(ref _volumeOffsetDb, Math.Clamp(value, -10.0, 10.0)))
                 {
-                    FireAndForget(
-                        () => UpdateAppPreferenceAsync(prefs => prefs.LufsTarget = _lufsTarget,
-                            nameof(LufsTarget)));
+                    FireAndForget(async () =>
+                    {
+                        await UpdateAppPreferenceAsync(prefs => prefs.VolumeOffsetDb = _volumeOffsetDb,
+                            nameof(VolumeOffsetDb));
+                        await ReapplyNormalizationAsync();
+                    });
                 }
             }
+        }
+
+        /// <summary>
+        /// Clears the normalization cache and re-applies volume normalization to the currently
+        /// playing track so preference changes take effect without restarting playback.
+        /// </summary>
+        private async Task ReapplyNormalizationAsync()
+        {
+            if (_volumeNormalizationService == null || _musicPlayerService == null)
+            {
+                return;
+            }
+
+            var currentItem = _musicPlayerService.CurrentItem;
+            var player = _musicPlayerService.MediaPlayer;
+            if (currentItem == null || player == null)
+            {
+                return;
+            }
+
+            // Evict stale cache entries so the updated preference is used
+            _volumeNormalizationService.ClearCache();
+
+            await _volumeNormalizationService.ApplyVolumeNormalizationAsync(player, currentItem)
+                .ConfigureAwait(false);
+
+            Logger.LogInformation("Re-applied volume normalization after preference change");
         }
 
         #endregion

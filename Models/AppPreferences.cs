@@ -28,9 +28,9 @@ namespace GelBox.Models
         public int DefaultSubtitleStreamIndex { get; set; } = -1;
 
         // === Volume Normalization ===
-        public bool EnableVolumeNormalization { get; set; } = true; // Enable LUFS-based volume normalization
+        public bool EnableVolumeNormalization { get; set; } = true; // Enable gain-based volume normalization
         public bool UseAlbumGain { get; set; } = false; // Use album-level normalization instead of track-level
-        public double LufsTarget { get; set; } = -16.0; // Target LUFS level for normalization (-30 to -10)
+        public double VolumeOffsetDb { get; set; } = 0.0; // Additional dB offset applied on top of normalization (-10 to +10)
 
         // === Network & Streaming ===
         public bool EnableDirectPlay { get; set; } = true; // Allow direct play when format is compatible
