@@ -63,7 +63,8 @@
 
                         <StackPanel x:Name="QueueContentPanel"
                                     Grid.Row="0"
-                                    Padding="8,0,8,8">
+                                    Padding="8,0,8,8"
+                                    XYFocusKeyboardNavigation="Enabled">
 
                             <!-- Previously Played (Collapsible) -->
                             <StackPanel x:Name="HistorySection" Visibility="Collapsed">
@@ -110,7 +111,8 @@
                                       HorizontalScrollBarVisibility="Disabled"
                                       XYFocusKeyboardNavigation="Enabled"
                                       IsTabStop="True">
-                            <StackPanel x:Name="UpcomingItemsPanel" />
+                            <StackPanel x:Name="UpcomingItemsPanel"
+                                        XYFocusKeyboardNavigation="Enabled" />
                         </ScrollViewer>
                     </Grid>
                 </Grid>

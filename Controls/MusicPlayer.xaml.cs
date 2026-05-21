@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -36,6 +37,8 @@ namespace GelBox.Controls
 
 
 
+        private int _queueDisplayCount = 100;
+
         public MusicPlayer()
         {
             InitializeComponent(); Loaded += MusicPlayer_Loaded;
@@ -56,6 +59,8 @@ namespace GelBox.Controls
 
         private void MusicPlayer_Loaded(object sender, RoutedEventArgs e)
         {
+            // Reset queue display count when loading
+            _queueDisplayCount = 100;
             var context = CreateErrorContext("MusicPlayerLoad");
             try
             {
@@ -1180,7 +1185,8 @@ namespace GelBox.Controls
                         isHistory: false,
                         isCurrent: true));
                 }
-                for (int i = 0; i < upcomingItems.Count; i++)
+                int count = Math.Min(upcomingItems.Count, _queueDisplayCount);
+                for (int i = 0; i < count; i++)
                 {
                     var item = upcomingItems[i];
                     upcomingPanel.Children.Add(CreateQueueItemRow(
@@ -1189,9 +1195,40 @@ namespace GelBox.Controls
                         isHistory: false,
                         isCurrent: false,
                         canMoveUp: i > 0,
-                        canMoveDown: i < upcomingItems.Count - 1));
+                        canMoveDown: i < count - 1));
+                }
+                // Add Show More button if there are more items
+                if (upcomingItems.Count > _queueDisplayCount)
+                {
+                    var showMoreBtn = new Windows.UI.Xaml.Controls.Button
+                    {
+                        Content = $"Show More ({Math.Min(100, upcomingItems.Count - _queueDisplayCount)})",
+                        Margin = new Windows.UI.Xaml.Thickness(0, 8, 0, 8),
+                        HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Center,
+                        Padding = new Windows.UI.Xaml.Thickness(16, 6, 16, 6),
+                        FontSize = 14,
+                        IsTabStop = true,
+                        TabIndex = 0
+                    };
+                    showMoreBtn.Click += ShowMoreQueueItems_Click;
+                    upcomingPanel.Children.Add(showMoreBtn);
+                    // Focus the Show More button if it's present and nothing else is focused
+                    showMoreBtn.Loaded += (s, e) =>
+                    {
+                        if (Windows.UI.Xaml.Window.Current?.Content is Windows.UI.Xaml.Controls.Frame frame &&
+                            frame.FocusState == Windows.UI.Xaml.FocusState.Unfocused)
+                        {
+                            showMoreBtn.Focus(Windows.UI.Xaml.FocusState.Programmatic);
+                        }
+                    };
                 }
             }
+        }
+
+        private void ShowMoreQueueItems_Click(object sender, RoutedEventArgs e)
+        {
+            _queueDisplayCount += 100;
+            RebuildQueuePanel();
         }
 
         private Grid CreateQueueItemRow(BaseItemDto item, int queueIndex, bool isHistory, bool isCurrent, bool canMoveUp = false, bool canMoveDown = false)
