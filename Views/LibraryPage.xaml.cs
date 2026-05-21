@@ -19,6 +19,7 @@ using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
+using Windows.System;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using static GelBox.Constants.LibraryConstants;
@@ -104,11 +105,52 @@ namespace GelBox.Views
                     Logger.LogInformation("LibraryPage: ScrollToAlphabetRequested event registered");
                 }
 
+                // Register page-level KeyDown for shoulder-button paging
+                try
+                {
+                    // Remove existing handler to avoid duplicates
+                    this.KeyDown -= LibraryPage_KeyDown;
+                    this.KeyDown += LibraryPage_KeyDown;
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogWarning(ex, "LibraryPage: Could not register KeyDown handler for shoulder buttons");
+                }
+
                 // Event handlers registered successfully
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error setting up Xbox navigation in LibraryPage");
+            }
+        }
+
+        private void LibraryPage_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                if (e.Key == VirtualKey.GamepadRightShoulder)
+                {
+                    if (ViewModel?.GoToNextPageCommand?.CanExecute(null) == true)
+                    {
+                        ViewModel.GoToNextPageCommand.Execute(null);
+                        e.Handled = true;
+                        Logger?.LogInformation("LibraryPage: GamepadRightShoulder pressed - Next page");
+                    }
+                }
+                else if (e.Key == VirtualKey.GamepadLeftShoulder)
+                {
+                    if (ViewModel?.GoToPreviousPageCommand?.CanExecute(null) == true)
+                    {
+                        ViewModel.GoToPreviousPageCommand.Execute(null);
+                        e.Handled = true;
+                        Logger?.LogInformation("LibraryPage: GamepadLeftShoulder pressed - Previous page");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error handling shoulder button KeyDown");
             }
         }
 
@@ -719,11 +761,7 @@ namespace GelBox.Views
             {
                 Logger.LogInformation("Shuffle button clicked for music library");
 
-                var hasNonAudioItems = ViewModel.MediaItems.Any(item =>
-                    item.Type == BaseItemDto_Type.MusicArtist ||
-                    item.Type == BaseItemDto_Type.MusicAlbum);
-
-                if (hasNonAudioItems)
+                if (ViewModel.SelectedLibrary?.CollectionType == BaseItemDto_CollectionType.Music)
                 {
                     Logger.LogInformation("Getting all songs from music library for shuffle");
 
@@ -740,46 +778,64 @@ namespace GelBox.Views
                         return;
                     }
 
-                    var libraryId = ViewModel.SelectedLibrary?.Id;
-                    if (!libraryId.HasValue)
-                    {
-                        Logger?.LogWarning("Library ID is null");
-                        return;
-                    }
-
                     if (_apiClient == null)
                     {
                         Logger?.LogWarning("API client is null");
                         return;
                     }
 
-                    var result = await _apiClient.Items.GetAsync(config =>
+                    var userId = new Guid(userIdStr);
+                    var allSongs = new List<BaseItemDto>();
+                    var pageSize = ShufflePlaylistLimit;
+                    var startIndex = 0;
+
+                    while (true)
                     {
-                        config.QueryParameters.UserId = new Guid(userIdStr);
-                        config.QueryParameters.ParentId = libraryId.Value;
-                        config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.Audio };
-                        config.QueryParameters.SortBy = new[] { ItemSortBy.Random };
-                        config.QueryParameters.Limit = ShufflePlaylistLimit;
-                        config.QueryParameters.Recursive =
-                            true; // Important: search recursively through all albums/artists
-                        config.QueryParameters.Fields =
-                            new[] { ItemFields.PrimaryImageAspectRatio, ItemFields.MediaSources };
-                    }, CancellationToken.None).ConfigureAwait(false);
-                    if (result?.Items == null || !result.Items.Any())
+                        var pageResult = await _apiClient.Items.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = userId;
+                            if (ViewModel.SelectedLibrary?.Id.HasValue == true && ViewModel.SelectedLibrary.Id.Value != Guid.Empty)
+                            {
+                                config.QueryParameters.ParentId = ViewModel.SelectedLibrary.Id.Value;
+                            }
+                            config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.Audio };
+                            config.QueryParameters.Limit = pageSize;
+                            config.QueryParameters.StartIndex = startIndex;
+                            config.QueryParameters.Recursive = true;
+                            config.QueryParameters.Fields = new[] { ItemFields.PrimaryImageAspectRatio, ItemFields.MediaSources };
+                        }, CancellationToken.None).ConfigureAwait(false);
+
+                        if (pageResult?.Items == null || !pageResult.Items.Any())
+                        {
+                            break;
+                        }
+
+                        allSongs.AddRange(pageResult.Items.Where(item => item.Type == BaseItemDto_Type.Audio));
+
+                        if (pageResult.Items.Count < pageSize ||
+                            (pageResult.TotalRecordCount.HasValue && allSongs.Count >= pageResult.TotalRecordCount.Value))
+                        {
+                            break;
+                        }
+
+                        startIndex += pageSize;
+                    }
+
+                    if (!allSongs.Any())
                     {
                         Logger.LogWarning("No songs found in music library");
                         return;
                     }
 
-                    Logger.LogInformation($"Starting shuffle playback with {result.Items.Count} songs");
+                    Logger.LogInformation($"Starting shuffle playback with {allSongs.Count} songs");
 
-                    // Use MusicPlayerService for music playback
                     if (_musicPlayerService != null)
                     {
                         var random = new Random();
-                        var randomStart = random.Next(result.Items.Count);
+                        var shuffledSongs = allSongs.OrderBy(x => random.Next()).ToList();
+                        var randomStart = random.Next(shuffledSongs.Count);
                         _musicPlayerService.SetShuffle(true);
-                        await _musicPlayerService.PlayItems(result.Items.ToList(), randomStart).ConfigureAwait(false);
+                        await _musicPlayerService.PlayItems(shuffledSongs, randomStart).ConfigureAwait(false);
                     }
                     else
                     {
@@ -982,19 +1038,26 @@ namespace GelBox.Views
 
                 if (ViewModel.SelectedLibrary.CollectionType == BaseItemDto_CollectionType.Music)
                 {
-                    // For music libraries, use album template
+                    // For music libraries, use the album-style template for albums, artists, and songs
                     MediaGrid.ItemTemplate = App.Current.Resources["CompactAlbumTemplate"] as DataTemplate;
                     if (itemsPanel != null)
                     {
                         itemsPanel.ItemWidth = 150;
-                        // Adjust height based on current filter
                         if (ViewModel.CurrentFilter == "Albums")
                         {
                             itemsPanel.ItemHeight = 180; // 130px image + 50px for two lines of text
                         }
-                        else // Artists
+                        else if (ViewModel.CurrentFilter == "Artists")
                         {
                             itemsPanel.ItemHeight = 155; // 130px image + 25px for one line of text + padding
+                        }
+                        else if (ViewModel.CurrentFilter == "Songs")
+                        {
+                            itemsPanel.ItemHeight = 180; // match album card height for consistent layout
+                        }
+                        else
+                        {
+                            itemsPanel.ItemHeight = 180;
                         }
                     }
                 }
@@ -1113,6 +1176,7 @@ namespace GelBox.Views
     {
         public DataTemplate ArtistTemplate { get; set; }
         public DataTemplate AlbumTemplate { get; set; }
+        public DataTemplate SongTemplate { get; set; }
         public DataTemplate DefaultTemplate { get; set; }
 
         protected override DataTemplate SelectTemplateCore(object item, DependencyObject container)
@@ -1127,6 +1191,11 @@ namespace GelBox.Views
                 if (baseItem.Type == BaseItemDto_Type.MusicAlbum)
                 {
                     return AlbumTemplate;
+                }
+
+                if (baseItem.Type == BaseItemDto_Type.Audio)
+                {
+                    return SongTemplate ?? DefaultTemplate;
                 }
             }
 

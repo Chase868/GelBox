@@ -75,17 +75,18 @@
                             VerticalAlignment="Center">
                     <!-- Music View Type Dropdown - Only visible for music libraries -->
                     <ComboBox x:Name="MusicViewComboBox"
-                              Visibility="{x:Bind ViewModel.ShowShuffleButton, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
-                              PlaceholderText="View"
-                              HorizontalAlignment="Left" MinWidth="100"
-                              Height="32"
-                              VerticalAlignment="Center"
-                              SelectionChanged="MusicViewComboBox_SelectionChanged"
-                              SelectedIndex="1"
-                              Style="{StaticResource LibraryHeaderComboBoxStyle}">
-                        <ComboBoxItem Content="Artists" Tag="Artists" />
-                        <ComboBoxItem Content="Albums" Tag="Albums" />
-                    </ComboBox>
+                        Visibility="{x:Bind ViewModel.ShowShuffleButton, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        PlaceholderText="View"
+                        HorizontalAlignment="Left" MinWidth="100"
+                        Height="32"
+                        VerticalAlignment="Center"
+                        SelectionChanged="MusicViewComboBox_SelectionChanged"
+                        SelectedIndex="1"
+                        Style="{StaticResource LibraryHeaderComboBoxStyle}">
+                    <ComboBoxItem Content="Artists" Tag="Artists" />
+                    <ComboBoxItem Content="Albums" Tag="Albums" />
+                    <ComboBoxItem Content="Songs" Tag="Songs" />
+                  </ComboBox>
                     <!-- Sort By ComboBox - MOVED FIRST -->
                     <ComboBox x:Name="SortByComboBox"
                               PlaceholderText="Sort By"
@@ -561,6 +562,31 @@
 
         <!-- Media List Container -->
         <Grid Grid.Row="1" Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource StandardControlMargin}" Spacing="8">
+                <TextBlock Text="Page size:" VerticalAlignment="Center" Opacity="0.8" />
+                <ComboBox ItemsSource="{x:Bind ViewModel.PageSizeOptions, Mode=OneWay}"
+                          SelectedItem="{x:Bind ViewModel.SelectedPageSize, Mode=TwoWay}"
+                          Width="90"
+                          Height="32"
+                          Style="{StaticResource LibraryHeaderComboBoxStyle}" />
+                <Button Content="Previous"
+                        Command="{x:Bind ViewModel.GoToPreviousPageCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+                <TextBlock Text="{x:Bind ViewModel.PageStatusText, Mode=OneWay}"
+                           VerticalAlignment="Center"
+                           Opacity="0.8"
+                           Margin="4,0" />
+                <Button Content="Next"
+                        Command="{x:Bind ViewModel.GoToNextPageCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+            </StackPanel>
+
             <!-- Media List -->
             <ListView x:Name="MediaGrid"
                       DataContext="{x:Bind ViewModel}"
@@ -569,13 +595,12 @@
                       IsItemClickEnabled="True"
                       ItemClick="MediaGrid_ItemClick"
                       Margin="{StaticResource StandardControlMargin}"
-                      IncrementalLoadingTrigger="Edge"
-                      IncrementalLoadingThreshold="3"
                       ScrollViewer.VerticalScrollMode="Enabled"
                       ScrollViewer.VerticalScrollBarVisibility="Auto"
                       ScrollViewer.HorizontalScrollMode="Disabled"
                       ScrollViewer.HorizontalScrollBarVisibility="Hidden"
-                      ScrollViewer.IsVerticalRailEnabled="True">
+                      ScrollViewer.IsVerticalRailEnabled="True"
+                      Grid.Row="1">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
                         <Setter Property="Padding" Value="0" />
@@ -595,6 +620,9 @@
                         <local:LibraryItemTemplateSelector.AlbumTemplate>
                             <StaticResource ResourceKey="CompactAlbumTemplate" />
                         </local:LibraryItemTemplateSelector.AlbumTemplate>
+                        <local:LibraryItemTemplateSelector.SongTemplate>
+                            <StaticResource ResourceKey="CompactAlbumTemplate" />
+                        </local:LibraryItemTemplateSelector.SongTemplate>
                     </local:LibraryItemTemplateSelector>
                 </ListView.ItemTemplateSelector>
                 <ListView.ItemsPanel>
@@ -602,10 +630,12 @@
                         <ItemsWrapGrid Orientation="Horizontal"
                                        HorizontalAlignment="Left"
                                        ItemWidth="{Binding ItemWidth}"
-                                       ItemHeight="{Binding ItemHeight}" />
+                                       ItemHeight="{Binding ItemHeight}"
+                                       MaximumRowsOrColumns="10" />
                     </ItemsPanelTemplate>
                 </ListView.ItemsPanel>
             </ListView>
+
         </Grid>
 
         <!-- Loading Indicator -->

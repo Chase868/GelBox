@@ -194,7 +194,6 @@ namespace GelBox.Services
                 }
 
                 Queue.RemoveAt(index);
-                _lastQueueHash = 0;
 
                 // Adjust current index if the removed item was before it
                 if (index < CurrentQueueIndex)
@@ -203,10 +202,31 @@ namespace GelBox.Services
                     QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
                 }
 
-                // Rebuild shuffle indices if in shuffle mode
-                if (IsShuffleMode)
+                if (IsShuffleMode && ShuffledIndices != null)
                 {
-                    CreateShuffledIndices();
+                    var removedShufflePosition = ShuffledIndices.IndexOf(index);
+                    if (removedShufflePosition >= 0)
+                    {
+                        ShuffledIndices.RemoveAt(removedShufflePosition);
+                        if (removedShufflePosition <= CurrentShuffleIndex)
+                        {
+                            CurrentShuffleIndex = Math.Max(0, CurrentShuffleIndex - 1);
+                        }
+                    }
+
+                    for (var i = 0; i < ShuffledIndices.Count; i++)
+                    {
+                        if (ShuffledIndices[i] > index)
+                        {
+                            ShuffledIndices[i]--;
+                        }
+                    }
+
+                    _lastQueueHash = GetQueueHash();
+                }
+                else
+                {
+                    _lastQueueHash = 0;
                 }
 
                 QueueChanged?.Invoke(this, Queue);
@@ -214,6 +234,131 @@ namespace GelBox.Services
             catch (Exception ex)
             {
                 var context = CreateErrorContext("RemoveFromQueue", ErrorCategory.Media);
+                FireAndForget(async () =>
+                    await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
+        }
+
+        public void MoveQueueItem(int fromIndex, int toIndex)
+        {
+            try
+            {
+                if (fromIndex < 0 || fromIndex >= Queue.Count ||
+                    toIndex < 0 || toIndex >= Queue.Count ||
+                    fromIndex == toIndex)
+                {
+                    return;
+                }
+
+                var item = Queue[fromIndex];
+                Queue.RemoveAt(fromIndex);
+
+                // Insert at final desired index. Do not adjust `toIndex` here;
+                // callers should provide the intended destination index.
+                Queue.Insert(toIndex, item);
+
+                if (CurrentQueueIndex == fromIndex)
+                {
+                    CurrentQueueIndex = toIndex;
+                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+                }
+                else if (fromIndex < CurrentQueueIndex && toIndex >= CurrentQueueIndex)
+                {
+                    CurrentQueueIndex--;
+                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+                }
+                else if (fromIndex > CurrentQueueIndex && toIndex <= CurrentQueueIndex)
+                {
+                    CurrentQueueIndex++;
+                    QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
+                }
+
+                if (IsShuffleMode && ShuffledIndices != null)
+                {
+                    var movedValue = fromIndex;
+                    var targetValue = toIndex;
+                    var movedPosition = ShuffledIndices.IndexOf(movedValue);
+
+                    for (var i = 0; i < ShuffledIndices.Count; i++)
+                    {
+                        if (ShuffledIndices[i] == movedValue)
+                        {
+                            ShuffledIndices[i] = -1;
+                        }
+                        else if (fromIndex < toIndex && ShuffledIndices[i] > fromIndex && ShuffledIndices[i] <= toIndex)
+                        {
+                            ShuffledIndices[i]--;
+                        }
+                        else if (fromIndex > toIndex && ShuffledIndices[i] >= toIndex && ShuffledIndices[i] < fromIndex)
+                        {
+                            ShuffledIndices[i]++;
+                        }
+                    }
+
+                    if (movedPosition >= 0)
+                    {
+                        ShuffledIndices[movedPosition] = targetValue;
+                    }
+
+                    CurrentShuffleIndex = ShuffledIndices.IndexOf(CurrentQueueIndex);
+                    if (CurrentShuffleIndex == -1)
+                    {
+                        CurrentShuffleIndex = 0;
+                    }
+
+                    _lastQueueHash = GetQueueHash();
+                }
+                else
+                {
+                    _lastQueueHash = 0;
+                }
+
+                QueueChanged?.Invoke(this, Queue);
+            }
+            catch (Exception ex)
+            {
+                var context = CreateErrorContext("MoveQueueItem", ErrorCategory.Media);
+                FireAndForget(async () =>
+                    await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
+        }
+
+        public void MoveQueueItemInShuffleOrder(int queueIndex, bool moveUp)
+        {
+            try
+            {
+                if (!IsShuffleMode || ShuffledIndices == null || !ShuffledIndices.Any())
+                {
+                    return;
+                }
+
+                var shufflePosition = ShuffledIndices.IndexOf(queueIndex);
+                if (shufflePosition < 0)
+                {
+                    return;
+                }
+
+                var targetPosition = moveUp ? shufflePosition - 1 : shufflePosition + 1;
+                if (targetPosition < 0 || targetPosition >= ShuffledIndices.Count)
+                {
+                    return;
+                }
+
+                if (shufflePosition == CurrentShuffleIndex || targetPosition == CurrentShuffleIndex)
+                {
+                    return;
+                }
+
+                var temp = ShuffledIndices[targetPosition];
+                ShuffledIndices[targetPosition] = ShuffledIndices[shufflePosition];
+                ShuffledIndices[shufflePosition] = temp;
+                _lastQueueHash = GetQueueHash();
+
+                QueueChanged?.Invoke(this, Queue);
+            }
+            catch (Exception ex)
+            {
+                var context = CreateErrorContext("MoveQueueItemInShuffleOrder", ErrorCategory.Media);
                 FireAndForget(async () =>
                     await ErrorHandler.HandleErrorAsync(ex, context, false));
             }

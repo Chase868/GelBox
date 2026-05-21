@@ -8,10 +8,14 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:GelBox.Controls"
+    xmlns:local="using:GelBox.Controls"
     mc:Ignorable="d"
     d:DesignHeight="80"
     d:DesignWidth="800"
     Height="84">
+    <controls:BaseControl.Resources>
+        <!-- No DataTemplate for queue: queue items are created in code-behind and added to StackPanel as before. -->
+    </controls:BaseControl.Resources>
     <Grid>
         <!-- Queue Panel (expands above the player bar) -->
         <Grid x:Name="QueuePanel"
@@ -51,10 +55,15 @@
                     </Grid>
 
                     <!-- Queue Content -->
-                    <ScrollViewer Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="QueueContentPanel" Padding="8,0,8,8">
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel x:Name="QueueContentPanel"
+                                    Grid.Row="0"
+                                    Padding="8,0,8,8">
 
                             <!-- Previously Played (Collapsible) -->
                             <StackPanel x:Name="HistorySection" Visibility="Collapsed">
@@ -86,17 +95,24 @@
                                        Foreground="{StaticResource SystemControlHighlightAccentBrush}"
                                        Margin="8,8,8,4" />
 
-                            <!-- Upcoming Queue -->
+                            <!-- Upcoming Queue Title -->
                             <TextBlock x:Name="UpNextLabel"
                                        Text="Up Next"
                                        FontSize="13"
                                        Foreground="#80FFFFFF"
                                        Margin="8,12,8,4"
                                        Visibility="Collapsed" />
-                            <StackPanel x:Name="UpcomingItemsPanel" />
-
                         </StackPanel>
-                    </ScrollViewer>
+
+                        <ScrollViewer Grid.Row="1"
+                                      Margin="8,0,8,8"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      XYFocusKeyboardNavigation="Enabled"
+                                      IsTabStop="True">
+                            <StackPanel x:Name="UpcomingItemsPanel" />
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using GelBox.Constants;
 using GelBox.Helpers;
@@ -10,8 +11,10 @@ using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.Media.Playback;
+using Windows.UI.Text;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Media;
 using RepeatMode = GelBox.Services.RepeatMode;
 
 namespace GelBox.Controls
@@ -30,6 +33,8 @@ namespace GelBox.Controls
         private DispatcherTimer _progressTimer;
         private bool _isQueueOpen = false;
         private bool _isHistoryExpanded = false;
+
+
 
         public MusicPlayer()
         {
@@ -113,7 +118,6 @@ namespace GelBox.Controls
                     _musicPlayerService.ShuffleStateChanged += OnShuffleStateChanged;
                     _musicPlayerService.RepeatModeChanged += OnRepeatModeChanged;
                     _musicPlayerService.QueueChanged += OnQueueChanged;
-
                     // Subscribe to MediaPlayer events for duration updates
                     SubscribeToMediaPlayer();
                 }
@@ -1073,6 +1077,7 @@ namespace GelBox.Controls
                     RebuildQueuePanel();
                     QueuePanel.Visibility = Visibility.Visible;
                     QueueToggleButton.Opacity = 1.0;
+                    // No focus for StackPanel; focus remains on parent or first interactive element
                     // Adjust the control height to show both panel and bar
                     Height = double.NaN; // Auto
                 }
@@ -1087,6 +1092,8 @@ namespace GelBox.Controls
             }
         }
 
+
+
         private void CloseQueueButton_Click(object sender, RoutedEventArgs e)
         {
             CloseQueuePanel();
@@ -1095,7 +1102,10 @@ namespace GelBox.Controls
         private void CloseQueuePanel()
         {
             _isQueueOpen = false;
-            QueuePanel.Visibility = Visibility.Collapsed;
+            if (QueuePanel != null)
+            {
+                QueuePanel.Visibility = Visibility.Collapsed;
+            }
             QueueToggleButton.Opacity = 0.6;
             Height = 84;
         }
@@ -1128,13 +1138,14 @@ namespace GelBox.Controls
             var currentIndex = _musicPlayerService.CurrentQueueIndex;
             var history = _musicPlayerService.PlayedHistory;
 
+            // No focus for StackPanel; focus remains on parent or first interactive element
+
             // Previously Played section
             if (history != null && history.Count > 0)
             {
                 HistorySection.Visibility = Visibility.Visible;
                 HistoryHeaderText.Text = $"Previously Played ({history.Count})";
                 HistoryItemsPanel.Children.Clear();
-
                 for (int i = history.Count - 1; i >= 0; i--)
                 {
                     var item = history[i];
@@ -1148,30 +1159,42 @@ namespace GelBox.Controls
             }
 
             // Upcoming items
-            UpcomingItemsPanel.Children.Clear();
-
-            if (queue == null || queue.Count == 0) return;
-
-            // Now Playing label is always visible when queue panel is open
-            // Show the current track in the upcoming list with highlight
-            if (currentIndex >= 0 && currentIndex < queue.Count)
+            if (queue == null || queue.Count == 0)
             {
-                UpcomingItemsPanel.Children.Add(CreateQueueItemRow(
-                    queue[currentIndex], currentIndex, isHistory: false, isCurrent: true));
+                UpNextLabel.Visibility = Visibility.Collapsed;
+                return;
             }
 
-            // Up next items
             var upcomingItems = _musicPlayerService.GetUpcomingQueue();
             UpNextLabel.Visibility = upcomingItems.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            for (int i = 0; i < upcomingItems.Count; i++)
+            var upcomingPanel = UpcomingItemsPanel;
+            if (upcomingPanel != null)
             {
-                UpcomingItemsPanel.Children.Add(CreateQueueItemRow(
-                    upcomingItems[i].Item, upcomingItems[i].QueueIndex, isHistory: false, isCurrent: false));
+                upcomingPanel.Children.Clear();
+                if (currentIndex >= 0 && currentIndex < queue.Count)
+                {
+                    upcomingPanel.Children.Add(CreateQueueItemRow(
+                        queue[currentIndex],
+                        currentIndex,
+                        isHistory: false,
+                        isCurrent: true));
+                }
+                for (int i = 0; i < upcomingItems.Count; i++)
+                {
+                    var item = upcomingItems[i];
+                    upcomingPanel.Children.Add(CreateQueueItemRow(
+                        item.Item,
+                        item.QueueIndex,
+                        isHistory: false,
+                        isCurrent: false,
+                        canMoveUp: i > 0,
+                        canMoveDown: i < upcomingItems.Count - 1));
+                }
             }
         }
 
-        private Grid CreateQueueItemRow(BaseItemDto item, int queueIndex, bool isHistory, bool isCurrent)
+        private Grid CreateQueueItemRow(BaseItemDto item, int queueIndex, bool isHistory, bool isCurrent, bool canMoveUp = false, bool canMoveDown = false)
         {
             var row = new Grid
             {
@@ -1226,9 +1249,72 @@ namespace GelBox.Controls
             Grid.SetColumn(info, 0);
             row.Children.Add(info);
 
-            // Remove button for upcoming (non-current) items
+            // Control buttons for upcoming (non-current) items
             if (!isHistory && !isCurrent)
             {
+                var queue = _musicPlayerService?.Queue;
+                var canMoveUpAvailable = queue != null && canMoveUp;
+                var canMoveDownAvailable = queue != null && canMoveDown;
+                var canRemove = queue != null;
+
+                var actionsPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Right,
+                    Spacing = 4,
+                    VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                };
+
+                var moveUpBtn = new Button
+                {
+                    Width = 32,
+                    Height = 32,
+                    Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderBrush = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Content = new TextBlock
+                    {
+                        Text = "▲",
+                        FontSize = 16,
+                        Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                        HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Center,
+                        VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                        TextAlignment = TextAlignment.Center,
+                    },
+                    Tag = queueIndex,
+                    IsEnabled = canMoveUpAvailable,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                    IsTabStop = true,
+                };
+                moveUpBtn.Click += MoveQueueItemUp_Click;
+                moveUpBtn.Opacity = canMoveUpAvailable ? 1.0 : 0.4;
+
+                var moveDownBtn = new Button
+                {
+                    Width = 32,
+                    Height = 32,
+                    Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderBrush = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Content = new TextBlock
+                    {
+                        Text = "▼",
+                        FontSize = 16,
+                        Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.White),
+                        HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Center,
+                        VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                        TextAlignment = TextAlignment.Center,
+                    },
+                    Tag = queueIndex,
+                    IsEnabled = canMoveDownAvailable,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                    IsTabStop = true,
+                };
+                moveDownBtn.Click += MoveQueueItemDown_Click;
+                moveDownBtn.Opacity = canMoveDownAvailable ? 1.0 : 0.4;
+
                 var removeBtn = new Button
                 {
                     Width = 32,
@@ -1236,12 +1322,15 @@ namespace GelBox.Controls
                     Background = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
                     BorderBrush = new Windows.UI.Xaml.Media.SolidColorBrush(Windows.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0),
-                    Content = new FontIcon
+                    Content = new TextBlock
                     {
-                        Glyph = "\uE74D",
-                        FontSize = 12,
+                        Text = "✕",
+                        FontSize = 16,
                         Foreground = new Windows.UI.Xaml.Media.SolidColorBrush(
-                            Windows.UI.Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                            Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+                        HorizontalAlignment = Windows.UI.Xaml.HorizontalAlignment.Center,
+                        VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
+                        TextAlignment = TextAlignment.Center,
                     },
                     Tag = queueIndex,
                     IsTabStop = true,
@@ -1249,9 +1338,15 @@ namespace GelBox.Controls
                     VerticalAlignment = Windows.UI.Xaml.VerticalAlignment.Center,
                 };
                 removeBtn.Click += RemoveQueueItem_Click;
-                removeBtn.Tapped += (s, args) => args.Handled = true;
-                Grid.SetColumn(removeBtn, 1);
-                row.Children.Add(removeBtn);
+                removeBtn.IsEnabled = canRemove;
+                removeBtn.Opacity = canRemove ? 1.0 : 0.4;
+
+                actionsPanel.Children.Add(moveUpBtn);
+                actionsPanel.Children.Add(moveDownBtn);
+                actionsPanel.Children.Add(removeBtn);
+
+                Grid.SetColumn(actionsPanel, 1);
+                row.Children.Add(actionsPanel);
             }
 
             // Make tappable for playing (non-history items)
@@ -1280,10 +1375,136 @@ namespace GelBox.Controls
             }
         }
 
+        private void MoveQueueItemUp_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is int index)
+                {
+                    if (_musicPlayerService?.IsShuffleMode == true)
+                    {
+                        _musicPlayerService.MoveQueueItemInShuffleOrder(index, true);
+                        Logger?.LogInformation($"Moved queue item in shuffle order up for queue index {index}");
+                    }
+                    else
+                    {
+                        var targetIndex = index - 1;
+                        if (targetIndex >= 0)
+                        {
+                            _musicPlayerService?.MoveQueueItem(index, targetIndex);
+                            Logger?.LogInformation($"Moved queue item from index {index} to {targetIndex}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in MoveQueueItemUp_Click");
+            }
+        }
+
+        private void MoveQueueItemDown_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is int index)
+                {
+                    if (_musicPlayerService?.IsShuffleMode == true)
+                    {
+                        _musicPlayerService.MoveQueueItemInShuffleOrder(index, false);
+                        Logger?.LogInformation($"Moved queue item in shuffle order down for queue index {index}");
+                    }
+                    else
+                    {
+                        var targetIndex = index + 1;
+                        if (targetIndex < (_musicPlayerService?.Queue.Count ?? 0))
+                        {
+                            _musicPlayerService?.MoveQueueItem(index, targetIndex);
+                            Logger?.LogInformation($"Moved queue item from index {index} to {targetIndex}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in MoveQueueItemDown_Click");
+            }
+        }
+
+        private void MoveQueueItemUp_PointerReleased(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is int index)
+                {
+                    if (_musicPlayerService?.IsShuffleMode == true)
+                    {
+                        _musicPlayerService.MoveQueueItemInShuffleOrder(index, true);
+                        Logger?.LogInformation($"Pointer released move up queue item in shuffle order for queue index {index}");
+                    }
+                    else
+                    {
+                        var targetIndex = index - 1;
+                        if (targetIndex >= 0)
+                        {
+                            _musicPlayerService?.MoveQueueItem(index, targetIndex);
+                            Logger?.LogInformation($"Pointer released move up queue item from index {index} to {targetIndex}");
+                        }
+                    }
+
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in MoveQueueItemUp_PointerReleased");
+            }
+        }
+
+        private void MoveQueueItemDown_PointerReleased(object sender, Windows.UI.Xaml.Input.PointerRoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is Button btn && btn.Tag is int index)
+                {
+                    if (_musicPlayerService?.IsShuffleMode == true)
+                    {
+                        _musicPlayerService.MoveQueueItemInShuffleOrder(index, false);
+                        Logger?.LogInformation($"Pointer released move down queue item in shuffle order for queue index {index}");
+                    }
+                    else
+                    {
+                        var targetIndex = index + 1;
+                        if (targetIndex < (_musicPlayerService?.Queue.Count ?? 0))
+                        {
+                            _musicPlayerService?.MoveQueueItem(index, targetIndex);
+                            Logger?.LogInformation($"Pointer released move down queue item from index {index} to {targetIndex}");
+                        }
+                    }
+
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error in MoveQueueItemDown_PointerReleased");
+            }
+        }
+
         private void QueueItemRow_Tapped(object sender, Windows.UI.Xaml.Input.TappedRoutedEventArgs e)
         {
             try
             {
+                var originalSource = e.OriginalSource as DependencyObject;
+                while (originalSource != null)
+                {
+                    if (originalSource is Button)
+                    {
+                        return;
+                    }
+                    originalSource = VisualTreeHelper.GetParent(originalSource);
+                }
+
                 if (sender is Grid grid && grid.Tag is int index)
                 {
                     _musicPlayerService?.PlayQueueItemAt(index);
@@ -1295,7 +1516,6 @@ namespace GelBox.Controls
                 Logger?.LogError(ex, "Error in QueueItemRow_Tapped");
             }
         }
-
 
         private void SubscribeToMediaPlayer()
         {

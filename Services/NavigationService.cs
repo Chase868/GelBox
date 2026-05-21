@@ -523,42 +523,57 @@ namespace GelBox.Services
                             }
 
                             Logger.LogInformation($"Loading playlist '{item.Name}' items (shuffle={shuffle})...");
-                            var response = await apiClient.Items.GetAsync(config =>
-                            {
-                                config.QueryParameters.ParentId = item.Id.Value;
-                                config.QueryParameters.UserId = userIdGuid;
-                            }).ConfigureAwait(false);
+                            var playlistItems = new List<BaseItemDto>();
+                            var pageSize = LibraryConstants.ShufflePlaylistLimit;
+                            var pageStart = 0;
 
-                            if (response?.Items?.Any() == true)
+                            while (true)
                             {
-                                var audioItems = response.Items
-                                    .Where(i => i.Type == BaseItemDto_Type.Audio)
-                                    .ToList();
-
-                                if (audioItems.Any())
+                                var pageResponse = await apiClient.Items.GetAsync(config =>
                                 {
-                                    Logger.LogInformation($"Playing playlist '{item.Name}' with {audioItems.Count} tracks (shuffle={shuffle})");
-                                    if (shuffle)
-                                    {
-                                        // Enable shuffle mode BEFORE setting the queue so CreateShuffledIndices runs during SetQueue
-                                        musicPlayerService.SetShuffle(true);
-                                        var random = new Random();
-                                        var randomStart = random.Next(audioItems.Count);
-                                        await musicPlayerService.PlayItems(audioItems, randomStart);
-                                    }
-                                    else
-                                    {
-                                        await musicPlayerService.PlayItems(audioItems);
-                                    }
+                                    config.QueryParameters.ParentId = item.Id.Value;
+                                    config.QueryParameters.UserId = userIdGuid;
+                                    config.QueryParameters.IncludeItemTypes = new[] { BaseItemKind.Audio };
+                                    config.QueryParameters.StartIndex = pageStart;
+                                    config.QueryParameters.Limit = pageSize;
+                                    config.QueryParameters.Fields = new[] { ItemFields.PrimaryImageAspectRatio, ItemFields.MediaSources };
+                                }).ConfigureAwait(false);
+
+                                if (pageResponse?.Items == null || !pageResponse.Items.Any())
+                                {
+                                    break;
+                                }
+
+                                playlistItems.AddRange(pageResponse.Items.Where(i => i.Type == BaseItemDto_Type.Audio));
+
+                                if (pageResponse.Items.Count < pageSize ||
+                                    (pageResponse.TotalRecordCount.HasValue && playlistItems.Count >= pageResponse.TotalRecordCount.Value))
+                                {
+                                    break;
+                                }
+
+                                pageStart += pageSize;
+                            }
+
+                            if (playlistItems.Any())
+                            {
+                                Logger.LogInformation($"Playing playlist '{item.Name}' with {playlistItems.Count} tracks (shuffle={shuffle})");
+                                if (shuffle)
+                                {
+                                    // Enable shuffle mode BEFORE setting the queue so CreateShuffledIndices runs during SetQueue
+                                    musicPlayerService.SetShuffle(true);
+                                    var random = new Random();
+                                    var randomStart = random.Next(playlistItems.Count);
+                                    await musicPlayerService.PlayItems(playlistItems, randomStart);
                                 }
                                 else
                                 {
-                                    Logger.LogWarning($"Playlist '{item.Name}' has no audio items");
+                                    await musicPlayerService.PlayItems(playlistItems);
                                 }
                             }
                             else
                             {
-                                Logger.LogWarning($"Playlist '{item.Name}' is empty");
+                                Logger.LogWarning($"Playlist '{item.Name}' has no audio items");
                             }
                         }
                         catch (Exception ex)

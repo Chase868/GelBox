@@ -226,6 +226,16 @@ namespace GelBox.Services
             _queueService.RemoveFromQueue(index);
         }
 
+        public void MoveQueueItem(int fromIndex, int toIndex)
+        {
+            _queueService.MoveQueueItem(fromIndex, toIndex);
+        }
+
+        public void MoveQueueItemInShuffleOrder(int queueIndex, bool moveUp)
+        {
+            _queueService.MoveQueueItemInShuffleOrder(queueIndex, moveUp);
+        }
+
         public void PlayQueueItemAt(int index)
         {
             if (index < 0 || index >= _queueService.Queue.Count)

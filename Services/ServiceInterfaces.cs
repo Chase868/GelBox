@@ -271,6 +271,8 @@ namespace GelBox.Services
         void AddToQueue(BaseItemDto item);
         void AddToQueueNext(BaseItemDto item);
         void RemoveFromQueue(int index);
+        void MoveQueueItem(int fromIndex, int toIndex);
+        void MoveQueueItemInShuffleOrder(int queueIndex, bool moveUp);
         void ClearQueue();
         void SetCurrentIndex(int index);
 
@@ -401,6 +403,8 @@ namespace GelBox.Services
         void AddToQueue(BaseItemDto item);
         void AddToQueueNext(BaseItemDto item);
         void RemoveFromQueue(int index);
+        void MoveQueueItem(int fromIndex, int toIndex);
+        void MoveQueueItemInShuffleOrder(int queueIndex, bool moveUp);
         void ClearQueue();
         void Stop();
         void Play();

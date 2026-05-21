@@ -24,9 +24,9 @@ namespace GelBox.ViewModels
 {
     public class LibraryViewModel : BaseViewModel
     {
-        private const int PageSize = DefaultPageSize;
         private const int MaxGenreCacheSize = 50; // Limit cache to 50 libraries
         private const string LibraryViewStateKey = "LibraryViewState";
+        private const string LibraryPageSizeKey = "LibraryPageSize";
         private readonly JellyfinApiClient _apiClient;
         private readonly ConcurrentDictionary<Guid, IEnumerable<string>> _genreCache = new();
         private readonly Queue<Guid> _genreCacheOrder = new(); // Track insertion order for LRU
@@ -70,6 +70,8 @@ namespace GelBox.ViewModels
         private bool _showResolutionFilter = true;
         private bool _showYearFilter = true;
 
+        private int _selectedPageSize;
+        private int _currentPageNumber = 1;
         private int _totalItemCount = 0;
 
         private sealed class LibraryViewState
@@ -80,6 +82,8 @@ namespace GelBox.ViewModels
             public bool IsAscending { get; set; }
             public string SearchTerm { get; set; }
             public Guid? SelectedLibraryId { get; set; }
+            public int CurrentPageNumber { get; set; } = 1;
+            public int SelectedPageSize { get; set; } = 100;
             public List<string> SelectedGenres { get; set; } = new();
             public List<string> SelectedYears { get; set; } = new();
             public List<string> SelectedRatings { get; set; } = new();
@@ -99,7 +103,10 @@ namespace GelBox.ViewModels
             _userProfileService = userProfileService ?? throw new ArgumentNullException(nameof(userProfileService));
 
             _currentStartIndex = 0;
-            HasMoreItems = true;
+            _selectedPageSize = _preferencesService.GetValue<int>(LibraryPageSizeKey, 100);
+            _currentPageNumber = 1;
+            _totalItemCount = 0;
+            HasMoreItems = false;
             // Start with loading state to prevent empty state from showing initially
             IsLoading = true;
 
@@ -108,6 +115,8 @@ namespace GelBox.ViewModels
             ScrollToAlphabetCommand =
                 new RelayCommand<string>(letter => ScrollToAlphabetRequested?.Invoke(this, letter));
             RefreshCommand = new RelayCommand(async () => await RefreshAsync().ConfigureAwait(false));
+            GoToPreviousPageCommand = new AsyncRelayCommand(async () => await GoToPageAsync(CurrentPageNumber - 1), () => HasPreviousPage);
+            GoToNextPageCommand = new AsyncRelayCommand(async () => await GoToPageAsync(CurrentPageNumber + 1), () => HasNextPage);
             LoadMoreItemsCommand = new AsyncRelayCommand(ExecuteLoadMoreItemsAsync, CanExecuteLoadMoreItems);
 
             InitializeStyles();
@@ -450,7 +459,59 @@ namespace GelBox.ViewModels
         public ICommand SetAlphabetFilterCommand { get; }
         public ICommand ScrollToAlphabetCommand { get; }
         public ICommand RefreshCommand { get; }
+        public IAsyncRelayCommand GoToPreviousPageCommand { get; }
+        public IAsyncRelayCommand GoToNextPageCommand { get; }
         public IAsyncRelayCommand LoadMoreItemsCommand { get; }
+
+        public IReadOnlyList<int> PageSizeOptions => new[] { 50, 100, 150, 200 };
+        public int SelectedPageSize
+        {
+            get => _selectedPageSize;
+            set
+            {
+                value = Math.Max(50, Math.Min(value, 200));
+                if (SetProperty(ref _selectedPageSize, value))
+                {
+                    _preferencesService.SetValue(LibraryPageSizeKey, value);
+                    CurrentPageNumber = 1;
+                    MediaItems.Clear();
+                    FireAndForget(async () => await ApplyFiltersAsync(isFullRefresh: true).ConfigureAwait(false), nameof(SelectedPageSize));
+                    OnPropertyChanged(nameof(TotalPages));
+                    OnPropertyChanged(nameof(PageStatusText));
+                    GoToPreviousPageCommand.NotifyCanExecuteChanged();
+                    GoToNextPageCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+
+        public int CurrentPageNumber
+        {
+            get => _currentPageNumber;
+            private set
+            {
+                if (SetProperty(ref _currentPageNumber, value))
+                {
+                    OnPropertyChanged(nameof(HasPreviousPage));
+                    OnPropertyChanged(nameof(HasNextPage));
+                    OnPropertyChanged(nameof(PageStatusText));
+                    GoToPreviousPageCommand.NotifyCanExecuteChanged();
+                    GoToNextPageCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+
+        public int TotalPages => PageSize > 0
+            ? Math.Max(1, (TotalItemCount + PageSize - 1) / PageSize)
+            : 1;
+
+        public string PageStatusText => TotalItemCount == 0
+            ? "Page 1 of 1"
+            : $"Page {CurrentPageNumber} of {TotalPages}";
+
+        public bool HasPreviousPage => CurrentPageNumber > 1;
+        public bool HasNextPage => CurrentPageNumber < TotalPages;
+
+        private int PageSize => _selectedPageSize;
 
         private void InvalidateFilterCountCache()
         {
@@ -1149,12 +1210,14 @@ namespace GelBox.ViewModels
                                         .ToArray();
                                     break;
                                 case "StartIndex":
+                                case "startIndex":
                                     if (int.TryParse(param.Value, out var startIndex))
                                     {
                                         config.QueryParameters.StartIndex = startIndex;
                                     }
                                     break;
                                 case "Limit":
+                                case "limit":
                                     if (int.TryParse(param.Value, out var limit))
                                     {
                                         config.QueryParameters.Limit = limit;
@@ -1377,9 +1440,12 @@ namespace GelBox.ViewModels
                         Logger?.LogError("MediaItems collection is null in ApplyFiltersAsync");
                     }
 
-                    _currentStartIndex = 0;
+                    _currentStartIndex = (CurrentPageNumber - 1) * PageSize;
                     HasMoreItems = true;
-                    TotalItemCount = 0;
+                    if (CurrentPageNumber == 1)
+                    {
+                        TotalItemCount = 0;
+                    }
                     // Notify property changes since _currentStartIndex affects item dimensions
                     OnPropertyChanged(nameof(ItemWidth));
                     OnPropertyChanged(nameof(ItemHeight));
@@ -1460,6 +1526,11 @@ namespace GelBox.ViewModels
                             TotalItemCount = result.TotalRecordCount.Value;
                         }
 
+                        OnPropertyChanged(nameof(TotalPages));
+                        OnPropertyChanged(nameof(PageStatusText));
+                        GoToPreviousPageCommand.NotifyCanExecuteChanged();
+                        GoToNextPageCommand.NotifyCanExecuteChanged();
+
                         // Notify property changes for item dimensions since they depend on _currentStartIndex
                         OnPropertyChanged(nameof(ItemWidth));
                         OnPropertyChanged(nameof(ItemHeight));
@@ -1472,6 +1543,11 @@ namespace GelBox.ViewModels
                     {
                         HasMoreItems = false;
                         if (isFullRefresh) { TotalItemCount = 0; }
+
+                        OnPropertyChanged(nameof(TotalPages));
+                        OnPropertyChanged(nameof(PageStatusText));
+                        GoToPreviousPageCommand.NotifyCanExecuteChanged();
+                        GoToNextPageCommand.NotifyCanExecuteChanged();
 
                         UpdateEmptyState();
                     });
@@ -1503,6 +1579,17 @@ namespace GelBox.ViewModels
         private bool CanExecuteLoadMoreItems()
         {
             return HasMoreItems && !IsLoading && !IsLoadingMore;
+        }
+
+        private async Task GoToPageAsync(int pageNumber)
+        {
+            if (pageNumber < 1 || pageNumber > TotalPages || pageNumber == CurrentPageNumber)
+            {
+                return;
+            }
+
+            CurrentPageNumber = pageNumber;
+            await ApplyFiltersAsync().ConfigureAwait(false);
         }
 
         private async Task ExecuteLoadMoreItemsAsync()
@@ -1741,6 +1828,7 @@ namespace GelBox.ViewModels
                 try
                 {
                     CurrentFilter = filter ?? "All";
+                    CurrentPageNumber = 1;
                     await ApplyFiltersAsync();
                 }
                 catch (Exception ex)
@@ -1758,6 +1846,7 @@ namespace GelBox.ViewModels
                 try
                 {
                     CurrentAlphabetFilter = letter == CurrentAlphabetFilter ? string.Empty : letter;
+                    CurrentPageNumber = 1;
                     // Alphabet filter should apply immediately as it's a quick filter outside the filter dialog
                     await ApplyFiltersAsync();
                 }
@@ -1831,6 +1920,7 @@ namespace GelBox.ViewModels
                         }
                     });
                     CurrentAlphabetFilter = string.Empty;
+                    CurrentPageNumber = 1;
                     InvalidateFilterCountCache();
                     await SaveViewStateAsync().ConfigureAwait(false);
                     await ApplyFiltersAsync();
@@ -1876,6 +1966,8 @@ namespace GelBox.ViewModels
                     IsAscending = IsAscending,
                     SearchTerm = SearchTerm,
                     SelectedLibraryId = SelectedLibrary?.Id,
+                    CurrentPageNumber = CurrentPageNumber,
+                    SelectedPageSize = SelectedPageSize,
                     SelectedGenres = Genres.Where(g => g.IsSelected).Select(g => g.Value).ToList(),
                     SelectedYears = Years.Where(y => y.IsSelected).Select(y => y.Value).ToList(),
                     SelectedRatings = Ratings.Where(r => r.IsSelected).Select(r => r.Value).ToList(),
@@ -1964,6 +2056,8 @@ namespace GelBox.ViewModels
                             }
                         }
 
+                        SelectedPageSize = savedState.SelectedPageSize > 0 ? savedState.SelectedPageSize : SelectedPageSize;
+                        CurrentPageNumber = savedState.CurrentPageNumber > 0 ? savedState.CurrentPageNumber : 1;
                         InvalidateFilterCountCache();
                     }
                     finally

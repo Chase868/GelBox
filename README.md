@@ -159,7 +159,7 @@ Direct play support for all common containers:
 | **X** | Jump to Music Player controls |
 | **D-Pad/Left Stick** | Navigate UI |
 | **Right Trigger (Hold 0.5s)** | Jump to MiniPlayer |
-| **LB/RB** | Switch tabs (where applicable) |
+| **LB/RB** | Switch tabs/pages (where applicable) |
 
 ### Video Playback Controls
 
@@ -241,7 +241,7 @@ Install directly from the Microsoft Store - search for "GelBox" or use the link 
 #### 1. Update Version Number
 - Open `Package.appxmanifest` in Visual Studio
 - Go to the **Packaging** tab
-- Increment the **Version** number (e.g., 1.0.5.0 -> 1.0.6.0)
+- Increment the **Version** number (e.g., 1.0.6.0 -> 1.0.7.0)
 - Save the file
 
 #### 2. Build Store Upload Package (PowerShell)
