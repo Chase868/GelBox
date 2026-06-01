@@ -33,6 +33,7 @@ namespace GelBox.Services
         private bool _isFetchingMoreEpisodes;
         private BaseItemDto _nextEpisode;
         private MediaPlaybackParams _playbackParams;
+        private const int MaxPlayedEpisodesInMemory = 1000; // Prevent unbounded growth during long sessions
 
         public MediaQueueService(
             JellyfinApiClient apiClient,
@@ -174,6 +175,7 @@ namespace GelBox.Services
                 ShuffledIndices = null;
                 _lastQueueHash = 0;
                 CurrentShuffleIndex = 0;
+                ClearPlaybackSessionMemory();
 
                 QueueChanged?.Invoke(this, Queue);
                 QueueIndexChanged?.Invoke(this, CurrentQueueIndex);
@@ -181,6 +183,41 @@ namespace GelBox.Services
             catch (Exception ex)
             {
                 FireAndForget(async () => await ErrorHandler.HandleErrorAsync(ex, context, false));
+            }
+        }
+
+        private void ClearPlaybackSessionMemory()
+        {
+            try
+            {
+                _playedEpisodesInSession.Clear();
+                while (_shuffledEpisodeQueue.TryDequeue(out _))
+                {
+                    // Clear the queue
+                }
+                _nextEpisode = null;
+                Logger?.LogInformation("Cleared playback session memory");
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError(ex, "Error clearing playback session memory");
+            }
+        }
+
+        private void PrunePlayedEpisodesIfNeeded()
+        {
+            if (_playedEpisodesInSession.Count > MaxPlayedEpisodesInMemory)
+            {
+                try
+                {
+                    // Clear and start fresh to prevent unbounded growth
+                    _playedEpisodesInSession.Clear();
+                    Logger?.LogInformation("Pruned played episodes cache to prevent memory exhaustion");
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogError(ex, "Error pruning played episodes");
+                }
             }
         }
 
@@ -513,6 +550,7 @@ namespace GelBox.Services
             if (IsShuffleMode && _currentItem.Type == BaseItemDto_Type.Episode && _currentItem.Id.HasValue)
             {
                 _playedEpisodesInSession.TryAdd(_currentItem.Id.Value, true);
+                PrunePlayedEpisodesIfNeeded();
                 FireAndForget(() => RefillShuffledQueueAsync(), "RefillShuffledQueue");
             }
 
@@ -615,6 +653,7 @@ namespace GelBox.Services
                     if (dequeuedEpisode.Id.HasValue)
                     {
                         _playedEpisodesInSession.TryAdd(dequeuedEpisode.Id.Value, true);
+                        PrunePlayedEpisodesIfNeeded();
                     }
                 }
 

@@ -646,9 +646,10 @@ namespace GelBox
                 var mediaControlService = provider.GetRequiredService<IMediaControlService>();
                 var apiClient = provider.GetRequiredService<JellyfinApiClient>();
                 var volumeNormalizationService = provider.GetRequiredService<IVolumeNormalizationService>();
+                var httpClientFactory = provider.GetRequiredService<IHttpClientFactory>();
                 return new MusicPlayerService(logger, provider, apiClient, authService, userProfileService, mediaPlaybackService,
                     deviceService, preferencesService, mediaOptimizationService, queueService, mediaControlService, volumeNormalizationService,
-                    provider.GetService<IEqualizerService>());
+                    httpClientFactory, provider.GetService<IEqualizerService>());
             });
 
             try
@@ -1557,15 +1558,22 @@ namespace GelBox
 
                 if (hasAuth)
                 {
+                    // Flag the service to skip Play() after loading so the track stays paused.
+                    // This avoids the race where Pause() was called before the internal Play() fired.
+                    musicPlayerService.SetPauseAfterNextLoad();
+
                     await UIHelper.RunOnUIThreadAsync(() =>
                     {
                         musicPlayerService.PlayQueueItemAt(currentIndex);
                     }, logger: _logger);
 
+                    // Wait long enough for PlayQueueItemAtAsync to finish loading and reach the
+                    // skip-play path (200ms direct + 1000ms transcoded + overhead).
+                    await Task.Delay(1500).ConfigureAwait(false);
+
                     if (TimeSpan.TryParse(savedPosition, out var parsedPosition) &&
                         parsedPosition > TimeSpan.Zero)
                     {
-                        await Task.Delay(1200).ConfigureAwait(false);
                         await UIHelper.RunOnUIThreadAsync(() =>
                         {
                             try
@@ -1582,12 +1590,6 @@ namespace GelBox
                             }
                         }, logger: _logger);
                     }
-
-                    await Task.Delay(150).ConfigureAwait(false);
-                    await UIHelper.RunOnUIThreadAsync(() =>
-                    {
-                        musicPlayerService.Pause();
-                    }, logger: _logger);
 
                     _logger?.LogWarning($"Playback restore prepared in paused state at queue index {currentIndex}");
                     Debug.WriteLine($"[QueueState] Playback restore paused at index {currentIndex}");
@@ -1963,5 +1965,7 @@ namespace GelBox
             {
             }
         }
+
+
     }
 }

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using GelBox.Constants;
@@ -14,7 +16,6 @@ using Windows.Media.Core;
 using Windows.Media.Playback;
 using Windows.Storage.Streams;
 using Windows.Web.Http;
-using Windows.Web.Http.Headers;
 
 namespace GelBox.Services
 {
@@ -27,6 +28,7 @@ namespace GelBox.Services
         private readonly IMediaOptimizationService _mediaOptimizationService;
         private readonly IMediaPlaybackService _mediaPlaybackService;
         private readonly IPreferencesService _preferencesService;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         private readonly IPlaybackQueueService _queueService;
         private readonly IServiceProvider _serviceProvider;
@@ -56,6 +58,7 @@ namespace GelBox.Services
         private Timer _progressReportTimer;
         private bool _isSmtcInitialized = false;
         private bool _isSubscribedToEvents = false;
+        private volatile bool _pauseAfterNextLoad = false;
         private readonly List<BaseItemDto> _playedHistory = new List<BaseItemDto>();
         private BaseItemDto _lastKnownPlayingItem;
         private const int MAX_HISTORY_SIZE = 50;
@@ -73,11 +76,13 @@ namespace GelBox.Services
             IPlaybackQueueService queueService,
             IMediaControlService mediaControlService,
             IVolumeNormalizationService volumeNormalizationService,
+            IHttpClientFactory httpClientFactory,
             IEqualizerService equalizerService = null) : base(logger)
         {
             _serviceProvider = serviceProvider;
             _apiClient = apiClient;
             _authService = authService;
+            _httpClientFactory = httpClientFactory;
             _userProfileService = userProfileService;
             _mediaPlaybackService = mediaPlaybackService;
             _deviceService = deviceService;
@@ -234,6 +239,11 @@ namespace GelBox.Services
         public void MoveQueueItemInShuffleOrder(int queueIndex, bool moveUp)
         {
             _queueService.MoveQueueItemInShuffleOrder(queueIndex, moveUp);
+        }
+
+        public void SetPauseAfterNextLoad()
+        {
+            _pauseAfterNextLoad = true;
         }
 
         public void PlayQueueItemAt(int index)
@@ -1837,7 +1847,17 @@ namespace GelBox.Services
                         }
                     }
 
+                    var startPaused = _pauseAfterNextLoad;
+
                     await _mediaControlService.SetMediaSource(playbackItem, itemForNotification).ConfigureAwait(false);
+
+                    // StartPlaybackAsync (called by SetMediaSource) sets AutoPlay = true.
+                    // Override it to false now so the media won't auto-start when it finishes
+                    // loading — we want to leave the player paused for the startup restore.
+                    if (startPaused && _mediaControlService.MediaPlayer != null)
+                    {
+                        _mediaControlService.MediaPlayer.AutoPlay = false;
+                    }
 
                     // Apply volume normalization for audio items (reuse already-fetched full item)
                     if (item.Type == BaseItemDto_Type.Audio)
@@ -1846,7 +1866,36 @@ namespace GelBox.Services
                             _mediaControlService.MediaPlayer, itemForNotification).ConfigureAwait(false);
                     }
 
+                    // For transcoded streams (HLS/adaptive), add a small delay to allow transcode buffer to accumulate
+                    // This prevents playback from starting before audio data is available from the transcoder
+                    if (_isCurrentlyTranscoded)
+                    {
+                        Logger.LogInformation("[TRANSCODE-BUFFERING] Waiting for transcode buffer to accumulate (1000ms delay)");
+                        await Task.Delay(1000).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // For direct streams, use a smaller delay to ensure media initialization
+                        Logger.LogInformation("[DIRECT-STREAM] Small initialization delay (200ms)");
+                        await Task.Delay(200).ConfigureAwait(false);
+                    }
+
+                    if (startPaused)
+                    {
+                        // Paused restore: clear flag and skip Play(). Do NOT restore AutoPlay = true
+                        // here — the media may still be loading and would auto-start if AutoPlay
+                        // flipped back to true before MediaOpened fires. Normal playback uses an
+                        // explicit Play() call so it doesn't depend on AutoPlay being true.
+                        // PlaybackControlService.StartPlaybackAsync sets AutoPlay = true itself
+                        // for quality-switch restarts, so those are also unaffected.
+                        _pauseAfterNextLoad = false;
+                        Logger.LogInformation("[PLAYBACK-START] Paused restore: skipping Play() per SetPauseAfterNextLoad flag");
+                        return;
+                    }
+
                     _mediaControlService.Play();
+                    Logger.LogInformation($"[PLAYBACK-START] Started playback (Transcoded: {_isCurrentlyTranscoded})");
+
                     // Tell the EQ service which URI is playing so it can build its AudioGraph.
                     // This must be called after Play() so the MediaPlayer state is Playing when
                     // OnAudioPlaybackStateChanged fires and starts the graph in sync.
@@ -1925,14 +1974,19 @@ namespace GelBox.Services
 
             try
             {
-                using var httpClient = new HttpClient();
+                if (_httpClientFactory == null)
+                {
+                    Logger.LogWarning("HttpClientFactory not available for media URL header logging");
+                    return;
+                }
+
+                var httpClient = _httpClientFactory.CreateClient("JellyfinClient");
                 httpClient.DefaultRequestHeaders.Accept.Clear();
-                httpClient.DefaultRequestHeaders.Accept.Add(new HttpMediaTypeWithQualityHeaderValue("*/*"));
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*"));
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 var response = await httpClient
-                    .GetAsync(new Uri(mediaUrl), HttpCompletionOption.ResponseHeadersRead)
-                    .AsTask(cts.Token)
+                    .GetAsync(new Uri(mediaUrl), System.Net.Http.HttpCompletionOption.ResponseHeadersRead)
                     .ConfigureAwait(false);
 
                 var contentType = response.Content?.Headers?.ContentType?.MediaType;
@@ -1942,8 +1996,8 @@ namespace GelBox.Services
                     $"[MEDIA-URL-HEADERS] Status={(int)response.StatusCode} {response.StatusCode}, " +
                     $"ContentType={contentType ?? "unknown"}, ContentLength={contentLength?.ToString() ?? "unknown"}");
 
-                if (response.StatusCode == HttpStatusCode.Unauthorized ||
-                    response.StatusCode == HttpStatusCode.Forbidden)
+                if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                    response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
                     Logger.LogWarning("[MEDIA-URL-HEADERS] Authentication failed for direct media URL");
                 }
@@ -2284,7 +2338,13 @@ namespace GelBox.Services
 
                         Logger.LogInformation("Starting transcoded playback");
                         _lastPlaybackStartTime = DateTime.UtcNow;
+                        
+                        // Add buffering delay for transcoded stream (universal endpoint HLS)
+                        Logger.LogInformation("[TRANSCODE-BUFFERING] Waiting for universal endpoint transcode buffer (1000ms delay)");
+                        await Task.Delay(1000).ConfigureAwait(false);
+                        
                         _mediaControlService.Play();
+                        Logger.LogInformation("[PLAYBACK-START] Started transcoded playback from universal endpoint");
 
                         Logger.LogInformation("Successfully initiated transcoding fallback");
 

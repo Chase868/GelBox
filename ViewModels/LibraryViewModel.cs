@@ -18,6 +18,7 @@ using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml;
+using GelBox.Views;
 using static GelBox.Constants.LibraryConstants;
 
 namespace GelBox.ViewModels
@@ -32,6 +33,9 @@ namespace GelBox.ViewModels
         private readonly Queue<Guid> _genreCacheOrder = new(); // Track insertion order for LRU
         private readonly IPreferencesService _preferencesService;
         private readonly IUserProfileService _userProfileService;
+        private readonly IMusicPlayerService _musicPlayerService;
+        private readonly IPlaybackQueueService _playbackQueueService;
+        private readonly INavigationService _navigationService;
         private CancellationTokenSource _applyFiltersCts;
         private int? _cachedActiveFilterCount;
         private string _currentAlphabetFilter = string.Empty;
@@ -95,12 +99,18 @@ namespace GelBox.ViewModels
             JellyfinApiClient apiClient,
             IPreferencesService preferencesService,
             IUserProfileService userProfileService,
+            IMusicPlayerService musicPlayerService,
+            IPlaybackQueueService playbackQueueService,
+            INavigationService navigationService,
             ILogger<LibraryViewModel> logger)
             : base(logger)
         {
             _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
             _preferencesService = preferencesService ?? throw new ArgumentNullException(nameof(preferencesService));
             _userProfileService = userProfileService ?? throw new ArgumentNullException(nameof(userProfileService));
+            _musicPlayerService = musicPlayerService ?? throw new ArgumentNullException(nameof(musicPlayerService));
+            _playbackQueueService = playbackQueueService ?? throw new ArgumentNullException(nameof(playbackQueueService));
+            _navigationService = navigationService ?? throw new ArgumentNullException(nameof(navigationService));
 
             _currentStartIndex = 0;
             _selectedPageSize = _preferencesService.GetValue<int>(LibraryPageSizeKey, 100);
@@ -118,6 +128,10 @@ namespace GelBox.ViewModels
             GoToPreviousPageCommand = new AsyncRelayCommand(async () => await GoToPageAsync(CurrentPageNumber - 1), () => HasPreviousPage);
             GoToNextPageCommand = new AsyncRelayCommand(async () => await GoToPageAsync(CurrentPageNumber + 1), () => HasNextPage);
             LoadMoreItemsCommand = new AsyncRelayCommand(ExecuteLoadMoreItemsAsync, CanExecuteLoadMoreItems);
+            PlayTrackCommand = new AsyncRelayCommand<BaseItemDto>(PlayTrackAsync);
+            PlayNextCommand = new AsyncRelayCommand<BaseItemDto>(PlayNextAsync);
+            AddToQueueCommand = new AsyncRelayCommand<BaseItemDto>(AddToQueueAsync);
+            StartInstantMixCommand = new AsyncRelayCommand<BaseItemDto>(StartInstantMixAsync);
 
             InitializeStyles();
             _currentFilter = "All";
@@ -462,6 +476,10 @@ namespace GelBox.ViewModels
         public IAsyncRelayCommand GoToPreviousPageCommand { get; }
         public IAsyncRelayCommand GoToNextPageCommand { get; }
         public IAsyncRelayCommand LoadMoreItemsCommand { get; }
+        public IAsyncRelayCommand<BaseItemDto> PlayTrackCommand { get; }
+        public IAsyncRelayCommand<BaseItemDto> PlayNextCommand { get; }
+        public IAsyncRelayCommand<BaseItemDto> AddToQueueCommand { get; }
+        public IAsyncRelayCommand<BaseItemDto> StartInstantMixCommand { get; }
 
         public IReadOnlyList<int> PageSizeOptions => new[] { 50, 100, 150, 200 };
         public int SelectedPageSize
@@ -2164,6 +2182,117 @@ namespace GelBox.ViewModels
         private void OnDecadesCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
             OnFilterCollectionChanged();
+        }
+
+        #endregion
+
+        #region Song Action Commands
+
+        private async Task PlayTrackAsync(BaseItemDto track)
+        {
+            if (track == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("PlayTrack", ErrorCategory.Media);
+            try
+            {
+                // Play the track from the current media items list
+                var startIndex = MediaItems.IndexOf(track);
+                if (startIndex < 0)
+                {
+                    startIndex = 0;
+                }
+
+                Logger?.LogInformation($"Playing track: {track.Name}");
+                await _musicPlayerService.PlayItems(MediaItems.ToList(), startIndex);
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false);
+            }
+        }
+
+        private async Task PlayNextAsync(BaseItemDto track)
+        {
+            if (track?.Id == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("PlayNext", ErrorCategory.Media);
+            try
+            {
+                _playbackQueueService.AddToQueueNext(track);
+                Logger?.LogInformation($"Added track '{track.Name}' to play next");
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false);
+            }
+        }
+
+        private async Task AddToQueueAsync(BaseItemDto track)
+        {
+            if (track?.Id == null)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("AddToQueue", ErrorCategory.Media);
+            try
+            {
+                _playbackQueueService.AddToQueue(track);
+                Logger?.LogInformation($"Added track '{track.Name}' to queue");
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false);
+            }
+        }
+
+        private async Task StartInstantMixAsync(BaseItemDto track)
+        {
+            if (track?.Id == null || !_currentUserId.HasValue)
+            {
+                return;
+            }
+
+            var context = CreateErrorContext("StartInstantMix", ErrorCategory.Media);
+            try
+            {
+                Logger?.LogInformation($"Starting instant mix for '{track.Name}'");
+                // Get instant mix for the track
+                var instantMix = await BaseService.RetryAsync(
+                    async () =>
+                    {
+                        return await _apiClient.Items[track.Id.Value].InstantMix.GetAsync(config =>
+                        {
+                            config.QueryParameters.UserId = _currentUserId.Value;
+                            config.QueryParameters.Limit = 100;
+                            config.QueryParameters.Fields = new[] { ItemFields.MediaSources };
+                        }).ConfigureAwait(false);
+                    },
+                    Logger,
+                    RetryConstants.DEFAULT_API_RETRY_ATTEMPTS,
+                    TimeSpan.FromMilliseconds(RetryConstants.INITIAL_RETRY_DELAY_MS),
+                    memberName: "StartInstantMixAsync").ConfigureAwait(false);
+
+                if (instantMix?.Items != null && instantMix.Items.Any())
+                {
+                    // Use MusicPlayerService for music playback
+                    await _musicPlayerService.PlayItems(instantMix.Items.ToList());
+                }
+                else
+                {
+                    Logger?.LogWarning("No instant mix items returned for track");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ErrorHandler.HandleErrorAsync(ex, context, false);
+            }
         }
 
         #endregion

@@ -29,6 +29,87 @@
         </Style>
 
         <!-- Selected Alphabet Button Style -->
+
+        <!-- Song card template for the Music library "Songs" filter.
+             Visually matches CompactAlbumTemplate; left-click opens the play/queue/instant-mix flyout. -->
+        <DataTemplate x:Key="SongContextTemplate">
+            <Button Padding="0"
+                    Margin="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Click="SongContextTemplateButton_Click">
+                <Button.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="Play"
+                                        Command="{Binding DataContext.PlayTrackCommand, ElementName=Page}"
+                                        CommandParameter="{Binding}">
+                            <MenuFlyoutItem.Icon>
+                                <SymbolIcon Symbol="Play" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Play Next"
+                                        Command="{Binding DataContext.PlayNextCommand, ElementName=Page}"
+                                        CommandParameter="{Binding}">
+                            <MenuFlyoutItem.Icon>
+                                <SymbolIcon Symbol="Next" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutItem Text="Add to Queue"
+                                        Command="{Binding DataContext.AddToQueueCommand, ElementName=Page}"
+                                        CommandParameter="{Binding}">
+                            <MenuFlyoutItem.Icon>
+                                <SymbolIcon Symbol="Add" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                        <MenuFlyoutSeparator />
+                        <MenuFlyoutItem Text="Start Instant Mix"
+                                        Command="{Binding DataContext.StartInstantMixCommand, ElementName=Page}"
+                                        CommandParameter="{Binding}">
+                            <MenuFlyoutItem.Icon>
+                                <FontIcon Glyph="&#xE8E5;" />
+                            </MenuFlyoutItem.Icon>
+                        </MenuFlyoutItem>
+                    </MenuFlyout>
+                </Button.ContextFlyout>
+                <Grid Width="150">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="130" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0"
+                            Width="130"
+                            Height="130"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource CardBackgroundBrush}"
+                            CornerRadius="{StaticResource MediumCornerRadius}">
+                        <Image Source="{Binding Converter={StaticResource ImageConverter}, ConverterParameter=Primary}"
+                               Stretch="UniformToFill" />
+                    </Border>
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding Name}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               TextAlignment="Center"
+                               Margin="0,2,0,0" />
+                    <TextBlock Grid.Row="2"
+                               Text="{Binding AlbumArtist}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               TextAlignment="Center"
+                               Margin="0,0,0,2" />
+                </Grid>
+            </Button>
+        </DataTemplate>
     </views:BasePage.Resources>
 
     <Grid>
@@ -594,6 +675,7 @@
                       SelectionMode="None"
                       IsItemClickEnabled="True"
                       ItemClick="MediaGrid_ItemClick"
+                      PreviewKeyDown="MediaGrid_PreviewKeyDown"
                       Margin="{StaticResource StandardControlMargin}"
                       ScrollViewer.VerticalScrollMode="Enabled"
                       ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -621,7 +703,7 @@
                             <StaticResource ResourceKey="CompactAlbumTemplate" />
                         </local:LibraryItemTemplateSelector.AlbumTemplate>
                         <local:LibraryItemTemplateSelector.SongTemplate>
-                            <StaticResource ResourceKey="CompactAlbumTemplate" />
+                            <StaticResource ResourceKey="SongContextTemplate" />
                         </local:LibraryItemTemplateSelector.SongTemplate>
                     </local:LibraryItemTemplateSelector>
                 </ListView.ItemTemplateSelector>

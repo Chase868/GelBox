@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.System;
@@ -204,6 +205,14 @@ namespace GelBox.Views
             }
         }
 
+        private void SongContextTemplateButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.ContextFlyout is FlyoutBase flyout)
+            {
+                flyout.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.Bottom });
+            }
+        }
+
         private void MediaGrid_ItemClick(object sender, ItemClickEventArgs e)
         {
             try
@@ -214,6 +223,25 @@ namespace GelBox.Views
                 {
                     Logger.LogInformation(
                         $"MediaGrid_ItemClick: Selected item - Name: {selectedItem.Name}, Type: {selectedItem.Type}, ID: {selectedItem.Id}");
+
+                    // For songs, show the context flyout.
+                    // On PC, Button.Click handles this (ItemClick is suppressed by the Button).
+                    // On Xbox, GamepadA fires ItemClick directly (the inner Button never gets clicked),
+                    // so we find the button in the container and show the flyout here.
+                    if (selectedItem.Type == BaseItemDto_Type.Audio)
+                    {
+                        if (sender is ListView listView)
+                        {
+                            var container = listView.ContainerFromItem(selectedItem) as ListViewItem;
+                            var button = container != null ? FindChildControl<Button>(container) : null;
+                            if (button?.ContextFlyout is FlyoutBase flyout)
+                            {
+                                flyout.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.Bottom });
+                            }
+                        }
+                        return;
+                    }
+
                     NavigateToDetailsPage(selectedItem);
                 }
                 else
@@ -224,8 +252,72 @@ namespace GelBox.Views
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error in MediaGrid_ItemClick");
+                Logger?.LogError(ex, "Error in MediaGrid_ItemClick");
             }
+        }
+
+        private void MediaGrid_PreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            try
+            {
+                // GamepadMenu (☰) on a song item: show the context flyout.
+                // GamepadA is handled via MediaGrid_ItemClick instead, because SelectionMode="None"
+                // means SelectedItem is always null here, while ItemClick provides the clicked item directly.
+                if (e.Key == VirtualKey.GamepadMenu)
+                {
+                    if (sender is ListView listView)
+                    {
+                        var focused = FocusManager.GetFocusedElement() as DependencyObject;
+                        var focusedItem = focused != null ? listView.ItemFromContainer(
+                            GetAncestorOfType<ListViewItem>(focused) ?? focused as ListViewItem) : null;
+                        if (focusedItem is BaseItemDto selectedItem && selectedItem.Type == BaseItemDto_Type.Audio)
+                        {
+                            var container = listView.ContainerFromItem(selectedItem) as ListViewItem;
+                            var button = container != null ? FindChildControl<Button>(container) : null;
+                            if (button?.ContextFlyout is MenuFlyout flyout)
+                            {
+                                flyout.ShowAt(button, new FlyoutShowOptions { Placement = FlyoutPlacementMode.Bottom });
+                                e.Handled = true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error in MediaGrid_PreviewKeyDown");
+            }
+        }
+
+        private static T GetAncestorOfType<T>(DependencyObject element) where T : DependencyObject
+        {
+            var current = VisualTreeHelper.GetParent(element);
+            while (current != null)
+            {
+                if (current is T match) return match;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return null;
+        }
+
+        private T FindChildControl<T>(DependencyObject parent) where T : DependencyObject
+        {
+            if (parent == null)
+                return null;
+
+            int childCount = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < childCount; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T typedChild)
+                    return typedChild;
+
+                var result = FindChildControl<T>(child);
+                if (result != null)
+                    return result;
+            }
+
+            return null;
         }
 
         private void NavigateToDetailsPage(BaseItemDto baseItem)
@@ -1038,26 +1130,21 @@ namespace GelBox.Views
 
                 if (ViewModel.SelectedLibrary.CollectionType == BaseItemDto_CollectionType.Music)
                 {
-                    // For music libraries, use the album-style template for albums, artists, and songs
-                    MediaGrid.ItemTemplate = App.Current.Resources["CompactAlbumTemplate"] as DataTemplate;
                     if (itemsPanel != null)
                     {
                         itemsPanel.ItemWidth = 150;
-                        if (ViewModel.CurrentFilter == "Albums")
+                        if (ViewModel.CurrentFilter == "Songs")
                         {
-                            itemsPanel.ItemHeight = 180; // 130px image + 50px for two lines of text
-                        }
-                        else if (ViewModel.CurrentFilter == "Artists")
-                        {
-                            itemsPanel.ItemHeight = 155; // 130px image + 25px for one line of text + padding
-                        }
-                        else if (ViewModel.CurrentFilter == "Songs")
-                        {
-                            itemsPanel.ItemHeight = 180; // match album card height for consistent layout
+                            // Let the LibraryItemTemplateSelector pick SongContextTemplate for Audio items
+                            // (a card-style button with the play/queue/instant-mix MenuFlyout).
+                            // Setting ItemTemplate = null re-enables the ItemTemplateSelector.
+                            MediaGrid.ItemTemplate = null;
+                            itemsPanel.ItemHeight = 180;
                         }
                         else
                         {
-                            itemsPanel.ItemHeight = 180;
+                            MediaGrid.ItemTemplate = App.Current.Resources["CompactAlbumTemplate"] as DataTemplate;
+                            itemsPanel.ItemHeight = ViewModel.CurrentFilter == "Artists" ? 155 : 180;
                         }
                     }
                 }
