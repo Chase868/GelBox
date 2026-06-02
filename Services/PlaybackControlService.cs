@@ -30,6 +30,7 @@ namespace GelBox.Services
         private readonly PlaybackSourceResolver _sourceResolver;
         private BaseItemDto _currentItem;
         private MediaSourceInfo _currentMediaSource;
+        private AdaptiveMediaSource _currentAdaptiveSource;
 
         private MediaPlayer _mediaPlayer;
         private string _playSessionId;
@@ -205,6 +206,7 @@ namespace GelBox.Services
             try
             {
                 Logger.LogInformation("[PLAYBACK-START] Beginning StartPlaybackAsync");
+                UnsubscribeAdaptiveMediaSourceEvents();
 
                 // Log MediaSource state before creating playback item
                 if (mediaSource != null)
@@ -466,14 +468,30 @@ namespace GelBox.Services
 
         private void ConfigureAdaptiveMediaSource(AdaptiveMediaSource adaptiveSource)
         {
-            if (adaptiveSource?.AvailableBitrates != null && adaptiveSource.AvailableBitrates.Count > 0)
+            // Unsubscribe from the previous source before subscribing to the new one.
+            // Without this, every quality switch or track change leaks a pair of event
+            // handler references that keep this service and the old AdaptiveMediaSource alive.
+            UnsubscribeAdaptiveMediaSourceEvents();
+
+            if (adaptiveSource == null) return;
+
+            if (adaptiveSource.AvailableBitrates != null && adaptiveSource.AvailableBitrates.Count > 0)
             {
                 Logger.LogInformation($"Initial bitrate: {adaptiveSource.InitialBitrate / 1000}kbps");
                 Logger.LogInformation($"Available bitrates: {adaptiveSource.AvailableBitrates.Count}");
             }
 
+            _currentAdaptiveSource = adaptiveSource;
             adaptiveSource.DownloadBitrateChanged += OnDownloadBitrateChanged;
             adaptiveSource.PlaybackBitrateChanged += OnPlaybackBitrateChanged;
+        }
+
+        private void UnsubscribeAdaptiveMediaSourceEvents()
+        {
+            if (_currentAdaptiveSource == null) return;
+            _currentAdaptiveSource.DownloadBitrateChanged -= OnDownloadBitrateChanged;
+            _currentAdaptiveSource.PlaybackBitrateChanged -= OnPlaybackBitrateChanged;
+            _currentAdaptiveSource = null;
         }
 
         private void UpdateResumePolicyFromMediaSource()

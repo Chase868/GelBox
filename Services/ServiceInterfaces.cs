@@ -419,6 +419,8 @@ namespace GelBox.Services
         void SetShuffle(bool enabled);
         void PlayQueueItemAt(int index);
         void SetPauseAfterNextLoad();
+        void SuppressNextPlaybackReport(string itemId);
+        bool PlayWasReportedForCurrentItem { get; }
         List<BaseItemDto> PlayedHistory { get; }
         List<(BaseItemDto Item, int QueueIndex)> GetUpcomingQueue();
         Task<bool> EnableBackgroundPlayback();

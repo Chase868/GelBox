@@ -67,6 +67,9 @@ namespace GelBox
             public bool WasPlaying { get; set; }
             public string Position { get; set; }
             public string CurrentItemId { get; set; }
+            // True when the track was stopped at >90% — play was already reported to Jellyfin
+            // so the next launch should skip StartPlaybackReporting to avoid double-counting.
+            public bool PlaybackAlreadyCounted { get; set; }
         }
 
         private sealed class AppStateSnapshot
@@ -83,6 +86,12 @@ namespace GelBox
         private volatile IServiceProvider _serviceProvider;
         private bool _statePersistenceEventsHooked;
         private bool _stateSavePending;
+        // Stored delegates so we can unsubscribe the exact same handlers on suspension.
+        private IMusicPlayerService _statePersistenceMusicService;
+        private EventHandler<List<BaseItemDto>> _onQueueChangedHandler;
+        private EventHandler<BaseItemDto> _onNowPlayingChangedHandler;
+        private EventHandler<bool> _onShuffleStateChangedHandler;
+        private EventHandler<RepeatMode> _onRepeatModeChangedHandler;
         private bool _startupStateRestoreCompleted;
         private bool _playbackResumeTriggeredThisLaunch;
         private bool _playbackResumeCompletedThisLaunch;
@@ -1095,6 +1104,7 @@ namespace GelBox
             var deferral = e.SuspendingOperation.GetDeferral();
             try
             {
+                UnhookStatePersistenceEvents();
                 await SaveMusicQueueStateAsync();
                 await SaveApplicationStateAsync();
             }
@@ -1334,16 +1344,49 @@ namespace GelBox
                     return;
                 }
 
-                musicPlayerService.QueueChanged += (_, __) => QueueStateSave();
-                musicPlayerService.NowPlayingChanged += (_, __) => QueueStateSave();
-                musicPlayerService.ShuffleStateChanged += (_, __) => QueueStateSave();
-                musicPlayerService.RepeatModeChanged += (_, __) => QueueStateSave();
+                _statePersistenceMusicService = musicPlayerService;
+                _onQueueChangedHandler      = (_, __) => QueueStateSave();
+                _onNowPlayingChangedHandler = (_, __) => QueueStateSave();
+                _onShuffleStateChangedHandler = (_, __) => QueueStateSave();
+                _onRepeatModeChangedHandler = (_, __) => QueueStateSave();
+
+                musicPlayerService.QueueChanged      += _onQueueChangedHandler;
+                musicPlayerService.NowPlayingChanged += _onNowPlayingChangedHandler;
+                musicPlayerService.ShuffleStateChanged += _onShuffleStateChangedHandler;
+                musicPlayerService.RepeatModeChanged += _onRepeatModeChangedHandler;
 
                 _statePersistenceEventsHooked = true;
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "Failed to hook state persistence events");
+            }
+        }
+
+        private void UnhookStatePersistenceEvents()
+        {
+            if (!_statePersistenceEventsHooked || _statePersistenceMusicService == null)
+                return;
+
+            try
+            {
+                _statePersistenceMusicService.QueueChanged      -= _onQueueChangedHandler;
+                _statePersistenceMusicService.NowPlayingChanged -= _onNowPlayingChangedHandler;
+                _statePersistenceMusicService.ShuffleStateChanged -= _onShuffleStateChangedHandler;
+                _statePersistenceMusicService.RepeatModeChanged -= _onRepeatModeChangedHandler;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to unhook state persistence events");
+            }
+            finally
+            {
+                _statePersistenceEventsHooked = false;
+                _statePersistenceMusicService = null;
+                _onQueueChangedHandler = null;
+                _onNowPlayingChangedHandler = null;
+                _onShuffleStateChangedHandler = null;
+                _onRepeatModeChangedHandler = null;
             }
         }
 
@@ -1393,15 +1436,26 @@ namespace GelBox
                 }
 
                 var queue = musicPlayerService.Queue ?? new List<BaseItemDto>();
+                var currentPosition = musicPlayerService.MediaPlayer?.PlaybackSession?.Position;
+                var isNowPlaying = musicPlayerService.IsPlaying;
+
+                // True when StopPlaybackReporting() successfully sent PlaybackStop to Jellyfin
+                // for the current item during this session (explicit stop or skip). On restore,
+                // we suppress StartPlaybackReporting so the play isn't counted a second time.
+                // App-close-without-explicit-stop is handled by CleanupAsync no longer sending
+                // PlaybackStop, so that path never produces a count to suppress.
+                var playbackAlreadyCounted = musicPlayerService.PlayWasReportedForCurrentItem;
+
                 var snapshot = new MusicQueueStateSnapshot
                 {
                     CurrentIndex = musicPlayerService.CurrentQueueIndex,
                     IsShuffled = musicPlayerService.IsShuffleMode,
                     ShuffledIndices = queueService?.ShuffledIndices?.ToList() ?? new List<int>(),
                     CurrentShuffleIndex = queueService?.CurrentShuffleIndex ?? 0,
-                    WasPlaying = musicPlayerService.IsPlaying,
-                    Position = musicPlayerService.MediaPlayer?.PlaybackSession?.Position.ToString(),
+                    WasPlaying = isNowPlaying,
+                    Position = currentPosition?.ToString(),
                     CurrentItemId = musicPlayerService.CurrentItem?.Id?.ToString(),
+                    PlaybackAlreadyCounted = playbackAlreadyCounted,
                     ItemIds = queue.Where(q => q?.Id.HasValue == true).Select(q => q.Id.Value.ToString()).ToList(),
                     Items = queue
                         .Where(q => q != null && q.Id.HasValue)
@@ -1782,6 +1836,15 @@ namespace GelBox
 
                 if (!_playbackResumeTriggeredThisLaunch)
                 {
+                    // Suppress play reporting if the previous session already counted this track.
+                    if (queueState.PlaybackAlreadyCounted &&
+                        !string.IsNullOrEmpty(queueState.CurrentItemId))
+                    {
+                        musicPlayerService.SuppressNextPlaybackReport(queueState.CurrentItemId);
+                        _logger?.LogInformation(
+                            $"[REPORTING] Suppressing play report for restored track {queueState.CurrentItemId} — already counted in previous session");
+                    }
+
                     if (autoPlayAfterRestore)
                     {
                         await TryResumePlaybackAsync(musicPlayerService, currentIndex, shouldResumePlayback, savedPosition)

@@ -785,13 +785,13 @@ namespace GelBox.Services
             var context = CreateErrorContext("Cleanup");
             try
             {
-                // Report playback stopped if we haven't already
-                if (_hasReportedStart && !_hasReportedStop && !string.IsNullOrEmpty(_playSessionId))
-                {
-                    await ReportPlaybackStoppedAsync(_playSessionId, 0);
-                }
+                // Do NOT send PlaybackStop here. Sending it with position=0 causes Jellyfin to
+                // count a play even if the track just started, and the session will be restored
+                // on next launch anyway. Any open session will be timed out by the Jellyfin server.
+                // Explicit stop/skip paths call StopPlaybackReporting() with the real position
+                // before reaching this point, so those are already handled correctly.
 
-                // Reset session state
+                // Reset session state only
                 _playbackParams = null;
                 _currentItem = null;
                 _playSessionId = null;

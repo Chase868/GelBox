@@ -11,6 +11,7 @@ using GelBox.Models;
 using Jellyfin.Sdk;
 using Jellyfin.Sdk.Generated.Models;
 using Microsoft.Extensions.Logging;
+using Windows.Foundation;
 using Windows.Media;
 using Windows.Media.Core;
 using Windows.Media.Playback;
@@ -59,6 +60,9 @@ namespace GelBox.Services
         private bool _isSmtcInitialized = false;
         private bool _isSubscribedToEvents = false;
         private volatile bool _pauseAfterNextLoad = false;
+        private volatile bool _suppressNextPlaybackReport = false;
+        private string _suppressedReportItemId;
+        private volatile bool _playWasReportedForCurrentItem = false;
         private readonly List<BaseItemDto> _playedHistory = new List<BaseItemDto>();
         private BaseItemDto _lastKnownPlayingItem;
         private const int MAX_HISTORY_SIZE = 50;
@@ -245,6 +249,14 @@ namespace GelBox.Services
         {
             _pauseAfterNextLoad = true;
         }
+
+        public void SuppressNextPlaybackReport(string itemId)
+        {
+            _suppressedReportItemId = itemId;
+            _suppressNextPlaybackReport = true;
+        }
+
+        public bool PlayWasReportedForCurrentItem => _playWasReportedForCurrentItem;
 
         public void PlayQueueItemAt(int index)
         {
@@ -644,10 +656,21 @@ namespace GelBox.Services
             var context = CreateErrorContext("EnableBackgroundPlayback", ErrorCategory.Media);
             try
             {
-                // Ensure MediaPlayer is initialized
+                // Release preloaded media sources before entering background.
+                // Xbox has limited memory budget for background apps; keeping preloaded
+                // sources alive across the transition is the primary trigger for OOM crashes.
+                try
+                {
+                    await _mediaOptimizationService.ClearOptimizationsAsync().ConfigureAwait(false);
+                    Logger.LogInformation("[BG-PLAY] Cleared preloaded media sources before entering background");
+                }
+                catch (Exception clearEx)
+                {
+                    Logger.LogWarning(clearEx, "[BG-PLAY] Failed to clear optimizations before background");
+                }
+
                 await EnsureMediaPlayerInitializedAsync().ConfigureAwait(false);
 
-                // Background playback enabled
                 if (_mediaControlService.MediaPlayer != null)
                 {
                     _mediaControlService.MediaPlayer.AudioCategory = MediaPlayerAudioCategory.Media;
@@ -666,7 +689,6 @@ namespace GelBox.Services
             var context = CreateErrorContext("DisableBackgroundPlayback", ErrorCategory.Media);
             try
             {
-                // Background playback disabled
                 if (_mediaControlService.MediaPlayer != null)
                 {
                     _mediaControlService.MediaPlayer.AudioCategory = MediaPlayerAudioCategory.Media;
@@ -1479,6 +1501,7 @@ namespace GelBox.Services
 
             // Reset fallback mode flag
             _isInFallbackMode = false;
+            _playWasReportedForCurrentItem = false;
 
             _currentMediaSource = mediaSource;
             _currentPlaySessionId = Guid.NewGuid().ToString();
@@ -1849,15 +1872,13 @@ namespace GelBox.Services
 
                     var startPaused = _pauseAfterNextLoad;
 
-                    await _mediaControlService.SetMediaSource(playbackItem, itemForNotification).ConfigureAwait(false);
-
-                    // StartPlaybackAsync (called by SetMediaSource) sets AutoPlay = true.
-                    // Override it to false now so the media won't auto-start when it finishes
-                    // loading — we want to leave the player paused for the startup restore.
-                    if (startPaused && _mediaControlService.MediaPlayer != null)
-                    {
+                    // Prevent AutoPlay from starting the media before we're ready.
+                    // For paused restore we skip Play() entirely; for normal playback
+                    // we call Play() explicitly once the buffer-ready check passes.
+                    if (_mediaControlService.MediaPlayer != null)
                         _mediaControlService.MediaPlayer.AutoPlay = false;
-                    }
+
+                    await _mediaControlService.SetMediaSource(playbackItem, itemForNotification).ConfigureAwait(false);
 
                     // Apply volume normalization for audio items (reuse already-fetched full item)
                     if (item.Type == BaseItemDto_Type.Audio)
@@ -1866,30 +1887,28 @@ namespace GelBox.Services
                             _mediaControlService.MediaPlayer, itemForNotification).ConfigureAwait(false);
                     }
 
-                    // For transcoded streams (HLS/adaptive), add a small delay to allow transcode buffer to accumulate
-                    // This prevents playback from starting before audio data is available from the transcoder
-                    if (_isCurrentlyTranscoded)
-                    {
-                        Logger.LogInformation("[TRANSCODE-BUFFERING] Waiting for transcode buffer to accumulate (1000ms delay)");
-                        await Task.Delay(1000).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        // For direct streams, use a smaller delay to ensure media initialization
-                        Logger.LogInformation("[DIRECT-STREAM] Small initialization delay (200ms)");
-                        await Task.Delay(200).ConfigureAwait(false);
-                    }
-
                     if (startPaused)
                     {
-                        // Paused restore: clear flag and skip Play(). Do NOT restore AutoPlay = true
-                        // here — the media may still be loading and would auto-start if AutoPlay
-                        // flipped back to true before MediaOpened fires. Normal playback uses an
-                        // explicit Play() call so it doesn't depend on AutoPlay being true.
-                        // PlaybackControlService.StartPlaybackAsync sets AutoPlay = true itself
-                        // for quality-switch restarts, so those are also unaffected.
+                        // Paused restore: clear flag and skip Play(). AutoPlay stays false —
+                        // normal playback always uses explicit Play(), and PlaybackControlService
+                        // sets AutoPlay = true itself for quality-switch restarts.
                         _pauseAfterNextLoad = false;
                         Logger.LogInformation("[PLAYBACK-START] Paused restore: skipping Play() per SetPauseAfterNextLoad flag");
+                        return;
+                    }
+
+                    // Wait until enough data is buffered before starting playback.
+                    // Replaces the old fixed 200 ms / 1000 ms delays with an event-driven check
+                    // so playback starts as soon as the stream is ready on any network speed.
+                    var ct = _playbackCancellationTokenSource?.Token ?? CancellationToken.None;
+                    await WaitForBufferReadyAsync(
+                        _mediaControlService.MediaPlayer?.PlaybackSession,
+                        _isCurrentlyTranscoded,
+                        ct).ConfigureAwait(false);
+
+                    if (ct.IsCancellationRequested)
+                    {
+                        Logger.LogInformation("[PLAYBACK-START] Cancelled during buffer wait, skipping Play()");
                         return;
                     }
 
@@ -1923,6 +1942,110 @@ namespace GelBox.Services
                 await ErrorHandler.HandleErrorAsync(ex, context, false).ConfigureAwait(false);
             }
         }
+
+        /// <summary>
+        /// Waits until the MediaPlaybackSession signals it has buffered enough data to start
+        /// playback cleanly, or until the timeout expires (whichever comes first).
+        /// Uses three complementary signals:
+        ///   1. DownloadProgress reaching a small threshold (data is arriving from the server)
+        ///   2. BufferingProgress reaching 1.0 (buffering phase finished)
+        ///   3. PlaybackState transitioning to Paused (player internally ready to play,
+        ///      which only happens with AutoPlay = false after MediaOpened fires)
+        /// A timeout cap prevents an indefinite hang on a slow or unresponsive server.
+        /// </summary>
+        private async Task WaitForBufferReadyAsync(
+            MediaPlaybackSession session,
+            bool isTranscoded,
+            CancellationToken cancellationToken)
+        {
+            if (session == null)
+            {
+                var fallback = isTranscoded
+                    ? MediaConstants.TRANSCODED_BUFFER_TIMEOUT_MS
+                    : MediaConstants.DIRECT_BUFFER_TIMEOUT_MS;
+                Logger.LogWarning($"[BUFFER-WAIT] No PlaybackSession — using {fallback}ms fallback delay");
+                await Task.Delay(fallback).ConfigureAwait(false);
+                return;
+            }
+
+            var downloadThreshold = isTranscoded
+                ? MediaConstants.TRANSCODED_DOWNLOAD_THRESHOLD
+                : MediaConstants.DIRECT_DOWNLOAD_THRESHOLD;
+            var timeoutMs = isTranscoded
+                ? MediaConstants.TRANSCODED_BUFFER_TIMEOUT_MS
+                : MediaConstants.DIRECT_BUFFER_TIMEOUT_MS;
+
+            if (IsBufferReady(session, downloadThreshold))
+            {
+                Logger.LogInformation(
+                    $"[BUFFER-WAIT] Already ready: download={session.DownloadProgress:P1} buffering={session.BufferingProgress:P1}");
+                return;
+            }
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            TypedEventHandler<MediaPlaybackSession, object> onBuffering = (s, _) =>
+            {
+                if (IsBufferReady(s, downloadThreshold)) tcs.TrySetResult(true);
+            };
+            TypedEventHandler<MediaPlaybackSession, object> onDownload = (s, _) =>
+            {
+                if (IsBufferReady(s, downloadThreshold)) tcs.TrySetResult(true);
+            };
+            TypedEventHandler<MediaPlaybackSession, object> onState = (s, _) =>
+            {
+                // With AutoPlay=false, Paused means the player has opened the media and
+                // decided it has sufficient data — this is the most reliable ready signal.
+                if (s.PlaybackState == MediaPlaybackState.Paused) tcs.TrySetResult(true);
+            };
+
+            session.BufferingProgressChanged += onBuffering;
+            session.DownloadProgressChanged  += onDownload;
+            session.PlaybackStateChanged     += onState;
+
+            // Register cancellation so a track skip unblocks the wait immediately.
+            using var cancelReg = cancellationToken.Register(() => tcs.TrySetCanceled());
+
+            try
+            {
+                // Close the TOCTOU window: re-check after subscribing.
+                if (IsBufferReady(session, downloadThreshold) ||
+                    session.PlaybackState == MediaPlaybackState.Paused)
+                {
+                    tcs.TrySetResult(true);
+                }
+
+                var timeoutTask = Task.Delay(timeoutMs);
+                await Task.WhenAny(tcs.Task, timeoutTask).ConfigureAwait(false);
+
+                if (tcs.Task.IsCompleted && !tcs.Task.IsCanceled)
+                {
+                    Logger.LogInformation(
+                        $"[BUFFER-WAIT] Ready — download={session.DownloadProgress:P1} " +
+                        $"buffering={session.BufferingProgress:P1} state={session.PlaybackState} " +
+                        $"transcoded={isTranscoded}");
+                }
+                else if (tcs.Task.IsCanceled)
+                {
+                    Logger.LogInformation("[BUFFER-WAIT] Cancelled (track changed during buffer wait)");
+                }
+                else
+                {
+                    Logger.LogWarning(
+                        $"[BUFFER-WAIT] Timed out after {timeoutMs}ms — starting anyway " +
+                        $"(download={session.DownloadProgress:P1} buffering={session.BufferingProgress:P1})");
+                }
+            }
+            finally
+            {
+                session.BufferingProgressChanged -= onBuffering;
+                session.DownloadProgressChanged  -= onDownload;
+                session.PlaybackStateChanged     -= onState;
+            }
+        }
+
+        private static bool IsBufferReady(MediaPlaybackSession session, double downloadThreshold) =>
+            session.DownloadProgress >= downloadThreshold || session.BufferingProgress >= 1.0;
 
         private bool ShouldForceTranscodingForAudio(MediaSourceInfo mediaSource)
         {
@@ -2095,6 +2218,25 @@ namespace GelBox.Services
                     return;
                 }
 
+                // Skip reporting if the previous app session already counted this play.
+                // This prevents double-counting when the queue is restored after app close
+                // and the user had already listened to >90% of this track last session.
+                if (_suppressNextPlaybackReport &&
+                    currentItem.Id?.ToString() == _suppressedReportItemId)
+                {
+                    _suppressNextPlaybackReport = false;
+                    _suppressedReportItemId = null;
+                    Logger.LogInformation(
+                        $"[REPORTING] Skipping PlaybackStart for '{currentItem.Name}' — play already counted in previous session");
+                    return;
+                }
+                // Clear stale suppression if a different item loaded first
+                if (_suppressNextPlaybackReport)
+                {
+                    _suppressNextPlaybackReport = false;
+                    _suppressedReportItemId = null;
+                }
+
                 // Report playback start
                 var positionTicks = _mediaControlService.Position.Ticks;
                 if (!currentItem.Id.HasValue)
@@ -2109,6 +2251,9 @@ namespace GelBox.Services
                     positionTicks,
                     _currentPlaySessionId).ConfigureAwait(false);
 
+                // Mark that PlaybackStart was sent — Jellyfin increments play count on start,
+                // so this flag tells SaveMusicQueueStateAsync to suppress the report on restore.
+                _playWasReportedForCurrentItem = true;
                 Logger.LogInformation($"Reported playback start for {currentItem.Name}");
 
                 // Start progress reporting timer (every 10 seconds)
@@ -2334,15 +2479,25 @@ namespace GelBox.Services
                         await Task.Delay(MediaConstants.MEDIA_SOURCE_CLEAR_DELAY_MS).ConfigureAwait(false);
 
                         Logger.LogInformation("Setting transcoded MediaPlaybackItem as source");
+                        if (_mediaControlService.MediaPlayer != null)
+                            _mediaControlService.MediaPlayer.AutoPlay = false;
                         await _mediaControlService.SetMediaSource(playbackItem, item).ConfigureAwait(false);
 
                         Logger.LogInformation("Starting transcoded playback");
                         _lastPlaybackStartTime = DateTime.UtcNow;
-                        
-                        // Add buffering delay for transcoded stream (universal endpoint HLS)
-                        Logger.LogInformation("[TRANSCODE-BUFFERING] Waiting for universal endpoint transcode buffer (1000ms delay)");
-                        await Task.Delay(1000).ConfigureAwait(false);
-                        
+
+                        var fallbackCt = _playbackCancellationTokenSource?.Token ?? CancellationToken.None;
+                        await WaitForBufferReadyAsync(
+                            _mediaControlService.MediaPlayer?.PlaybackSession,
+                            isTranscoded: true,
+                            fallbackCt).ConfigureAwait(false);
+
+                        if (fallbackCt.IsCancellationRequested)
+                        {
+                            Logger.LogInformation("[PLAYBACK-START] Cancelled during fallback buffer wait");
+                            return;
+                        }
+
                         _mediaControlService.Play();
                         Logger.LogInformation("[PLAYBACK-START] Started transcoded playback from universal endpoint");
 

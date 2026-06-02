@@ -28,8 +28,11 @@ namespace GelBox.Services
         private readonly INetworkMonitor _networkMonitor;
         private readonly IPreferencesService _preferencesService;
         private readonly IVolumeNormalizationService _volumeNormalizationService;
-            private readonly IEqualizerService _equalizerService;
+        private readonly IEqualizerService _equalizerService;
         private readonly ConcurrentDictionary<string, Task<MediaSource>> _preloadTasks = new();
+        // HttpClients passed to AdaptiveMediaSource must outlive the stream; tracked here for disposal.
+        private readonly System.Collections.Concurrent.ConcurrentBag<Windows.Web.Http.HttpClient> _adaptiveHttpClients = new();
+        private const int MaxMediaSourceCacheSize = 10;
         private readonly Task _initializationTask;
         private int _currentBandwidthKbps = 0;
         private bool _hdrOutputEnabled = false;
@@ -91,8 +94,12 @@ namespace GelBox.Services
                     return MediaSource.CreateFromUri(new Uri(mediaUrl));
                 }
 
-                // Create Windows.Web.Http.HttpClient for AdaptiveMediaSource
+                // Create Windows.Web.Http.HttpClient for AdaptiveMediaSource.
+                // The client must remain alive for the full lifetime of the AdaptiveMediaSource
+                // (it is used for every segment request, not just the manifest fetch), so we
+                // track it in _adaptiveHttpClients and dispose the whole bag in ClearOptimizationsAsync.
                 var windowsHttpClient = new Windows.Web.Http.HttpClient();
+                _adaptiveHttpClients.Add(windowsHttpClient);
 
                 // Add authorization header if available
                 if (!string.IsNullOrEmpty(accessToken))
@@ -551,8 +558,18 @@ namespace GelBox.Services
                     var mediaSource = await preloadTask.ConfigureAwait(false);
                     if (mediaSource != null)
                     {
-                        _mediaSourceCache.TryAdd(itemId, mediaSource);
-                        Logger.LogInformation($"Pre-cached media source for: {item.Name}");
+                        if (_mediaSourceCache.Count < MaxMediaSourceCacheSize)
+                        {
+                            _mediaSourceCache.TryAdd(itemId, mediaSource);
+                            Logger.LogInformation($"Pre-cached media source for: {item.Name}");
+                        }
+                        else
+                        {
+                            // Cache is at capacity — discard this preload rather than growing unbounded.
+                            // On Xbox with limited RAM, keeping stale sources alive causes OOM.
+                            Logger.LogInformation($"Media source cache at capacity ({MaxMediaSourceCacheSize}), discarding preload for: {item.Name}");
+                            mediaSource.Dispose();
+                        }
                     }
                 }
                 finally
@@ -642,6 +659,12 @@ namespace GelBox.Services
                 }
 
                 _mediaSourceCache.Clear();
+
+                // Dispose HttpClients that were keeping AdaptiveMediaSource segment requests alive.
+                while (_adaptiveHttpClients.TryTake(out var client))
+                {
+                    try { client.Dispose(); } catch { /* ignore disposal errors */ }
+                }
 
                 // Clear image cache if memory constrained
                 if (_memoryMonitor?.IsMemoryConstrained == true)

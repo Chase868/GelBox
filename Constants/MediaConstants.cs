@@ -9,6 +9,14 @@ namespace GelBox.Constants
         // Media playback delays
         public const int MEDIA_SOURCE_CLEAR_DELAY_MS = 500;
 
+        // Buffer-ready playback thresholds (used by WaitForBufferReadyAsync)
+        // DownloadProgress fraction (0–1) at which playback can safely start
+        public const double TRANSCODED_DOWNLOAD_THRESHOLD = 0.03;  // 3 % for HLS/transcoded
+        public const double DIRECT_DOWNLOAD_THRESHOLD = 0.005;     // 0.5 % for direct streams
+        // Maximum wait before starting regardless of buffer state
+        public const int TRANSCODED_BUFFER_TIMEOUT_MS = 5000;
+        public const int DIRECT_BUFFER_TIMEOUT_MS = 1500;
+
         // Query limits
         public const int MAX_DISCOVERY_QUERY_LIMIT = 100;
         public const int EXTENDED_QUERY_LIMIT = 500;

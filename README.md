@@ -241,7 +241,7 @@ Install directly from the Microsoft Store - search for "GelBox" or use the link 
 #### 1. Update Version Number
 - Open `Package.appxmanifest` in Visual Studio
 - Go to the **Packaging** tab
-- Increment the **Version** number (e.g., 1.0.7.0 -> 1.0.8.0)
+- Increment the **Version** number (e.g., 1.0.8.0 -> 1.0.9.0)
 - Save the file
 
 #### 2. Build Store Upload Package (PowerShell)
